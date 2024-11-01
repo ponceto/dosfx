@@ -242,13 +242,23 @@ void screen_init(Screen* screen)
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
-        uint16_t pos_x = 0;
-        uint16_t pos_y = 0;
+        uint16_t     pos_x = 0;
+        uint16_t     pos_y = 0;
         uint8_t far* pixel = screen->pixels;
         for(pos_y = 0; pos_y < dim_h; ++pos_y) {
             for(pos_x = 0; pos_x < dim_w; ++pos_x) {
                 *pixel++ = UINT8_T(0);
             }
+        }
+    }
+    if(screen->pixels != NULL) {
+        uint16_t       index = 0;
+        const uint16_t count = 256;
+        for(index = 0; index < count; ++index) {
+            const uint8_t pal_r = index;
+            const uint8_t pal_g = index;
+            const uint8_t pal_b = index;
+            vga_set_color(index, pal_r, pal_g, pal_b);
         }
     }
 }
@@ -263,21 +273,29 @@ void screen_fini(Screen* screen)
 
 void screen_update(Screen* screen, Plasma* plasma)
 {
-    const int update_colors = 1;
-    const int update_screen = 1;
+    const uint16_t src_w = plasma->effect.dim_w;
+    const uint16_t src_h = plasma->effect.dim_h;
+    const uint16_t dst_w = screen->dim_w;
+    uint8_t far*   src_p = plasma->effect.pixels;
+    uint8_t far*   dst_1 = (screen->pixels + (0 * dst_w));
+    uint8_t far*   dst_2 = (screen->pixels + (1 * dst_w));
 
-    vga_wait_vbl();
+    /* wait for vbl */ {
+        vga_wait_vbl();
+    }
+    /* update_colors */ {
+        uint16_t       index = 0;
+        const uint16_t count = 256;
+        const uint16_t inc_r = plasma->effect.inc_r;
+        const uint16_t inc_g = plasma->effect.inc_g;
+        const uint16_t inc_b = plasma->effect.inc_b;
+        uint16_t       pal_r = plasma->effect.pal_r + inc_r;
+        uint16_t       pal_g = plasma->effect.pal_g + inc_g;
+        uint16_t       pal_b = plasma->effect.pal_b + inc_b;
 
-    if(update_colors) {
-        uint16_t index = 0;
-        uint16_t count = 256;
-        uint16_t pal_r = plasma->effect.pal_r, inc_r = plasma->effect.inc_r;
-        uint16_t pal_g = plasma->effect.pal_g, inc_g = plasma->effect.inc_g;
-        uint16_t pal_b = plasma->effect.pal_b, inc_b = plasma->effect.inc_b;
-
-        plasma->effect.pal_r += inc_r;
-        plasma->effect.pal_g += inc_g;
-        plasma->effect.pal_b += inc_b;
+        plasma->effect.pal_r = pal_r;
+        plasma->effect.pal_g = pal_g;
+        plasma->effect.pal_b = pal_b;
         for(index = 0; index < count; ++index) {
             vga_set_color(index, (pal_r >> 8), (pal_g >> 8), (pal_b >> 8));
             pal_r += inc_r;
@@ -285,26 +303,19 @@ void screen_update(Screen* screen, Plasma* plasma)
             pal_b += inc_b;
         }
     }
-
-    if(update_screen) {
-        uint16_t dim_w = plasma->effect.dim_w, pos_x = 0;
-        uint16_t dim_h = plasma->effect.dim_h, pos_y = 0;
-        uint16_t row_stride = screen->dim_w;
-        uint8_t pixel = 0;
-        uint8_t far* data = plasma->effect.pixels;
-        uint8_t far* row1 = (screen->pixels + (0 * row_stride));
-        uint8_t far* row2 = (screen->pixels + (1 * row_stride));
-
-        for(pos_y = dim_h; pos_y != 0; --pos_y) {
-            for(pos_x = dim_w; pos_x != 0; --pos_x) {
-                pixel = *data++;
-                *row1++ = pixel;
-                *row1++ = pixel;
-                *row2++ = pixel;
-                *row2++ = pixel;
+    /* update_screen */ {
+        uint16_t pos_x = 0;
+        uint16_t pos_y = 0;
+        for(pos_y = src_h; pos_y != 0; --pos_y) {
+            for(pos_x = src_w; pos_x != 0; --pos_x) {
+                const uint8_t pixel = *src_p++;
+                *dst_1++ = pixel;
+                *dst_1++ = pixel;
+                *dst_2++ = pixel;
+                *dst_2++ = pixel;
             }
-            row1 += row_stride;
-            row2 += row_stride;
+            dst_1 += dst_w;
+            dst_2 += dst_w;
         }
     }
 }
@@ -324,8 +335,8 @@ void effect_init(Effect* effect)
         effect->pixels = (uint8_t far*) malloc(dim_h * dim_w);
     }
     if(effect->pixels != NULL) {
-        uint16_t pos_x = 0;
-        uint16_t pos_y = 0;
+        uint16_t     pos_x = 0;
+        uint16_t     pos_y = 0;
         uint8_t far* pixel = effect->pixels;
         for(pos_y = 0; pos_y < dim_h; ++pos_y) {
             for(pos_x = 0; pos_x < dim_w; ++pos_x) {
@@ -383,8 +394,8 @@ void image1_init(Image1* image1)
         image1->pixels = (uint8_t far*) malloc(dim_h * dim_w);
     }
     if(image1->pixels != NULL) {
-        uint16_t pos_x = 0;
-        uint16_t pos_y = 0;
+        uint16_t     pos_x = 0;
+        uint16_t     pos_y = 0;
         uint8_t far* pixel = image1->pixels;
         for(pos_y = 0; pos_y < dim_h; ++pos_y) {
             for(pos_x = 0; pos_x < dim_w; ++pos_x) {
@@ -426,8 +437,8 @@ void image2_init(Image2* image2)
         image2->pixels = (uint8_t far*) malloc(dim_h * dim_w);
     }
     if(image2->pixels != NULL) {
-        uint16_t pos_x = 0;
-        uint16_t pos_y = 0;
+        uint16_t     pos_x = 0;
+        uint16_t     pos_y = 0;
         uint8_t far* pixel = image2->pixels;
         for(pos_y = 0; pos_y < dim_h; ++pos_y) {
             for(pos_x = 0; pos_x < dim_w; ++pos_x) {
@@ -469,8 +480,8 @@ void image3_init(Image3* image3)
         image3->pixels = (uint8_t far*) malloc(dim_h * dim_w);
     }
     if(image3->pixels != NULL) {
-        uint16_t pos_x = 0;
-        uint16_t pos_y = 0;
+        uint16_t     pos_x = 0;
+        uint16_t     pos_y = 0;
         uint8_t far* pixel = image3->pixels;
         for(pos_y = 0; pos_y < dim_h; ++pos_y) {
             for(pos_x = 0; pos_x < dim_w; ++pos_x) {
