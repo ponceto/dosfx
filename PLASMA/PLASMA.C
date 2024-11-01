@@ -94,10 +94,10 @@ struct _Effect
 
 struct _Buffer
 {
-    uint16_t     pos_x;
-    uint16_t     pos_y;
     uint16_t     dim_w;
     uint16_t     dim_h;
+    uint16_t     pos_x;
+    uint16_t     pos_y;
     uint16_t     angle;
     uint16_t     speed;
     uint8_t far* pixels;
@@ -141,28 +141,28 @@ Plasma g_plasma = {
         NULL  /* pixels */
     },
     /* image1 */ {
-        0,    /* pos_x  */
-        0,    /* pos_y  */
         320,  /* dim_w  */
         200,  /* dim_h  */
+        0,    /* pos_x  */
+        0,    /* pos_y  */
         0,    /* angle  */
         -5,   /* speed  */
         NULL  /* pixels */
     },
     /* image2 */ {
-        0,    /* pos_x  */
-        0,    /* pos_y  */
         320,  /* dim_w  */
         200,  /* dim_h  */
+        0,    /* pos_x  */
+        0,    /* pos_y  */
         0,    /* angle  */
         +2,   /* speed  */
         NULL  /* pixels */
     },
     /* image3 */ {
-        0,    /* pos_x  */
-        0,    /* pos_y  */
         320,  /* dim_w  */
         200,  /* dim_h  */
+        0,    /* pos_x  */
+        0,    /* pos_y  */
         0,    /* angle  */
         +3,   /* speed  */
         NULL  /* pixels */
@@ -234,20 +234,19 @@ void tables_fini(Tables* tables)
 
 void screen_init(Screen* screen)
 {
-    const uint16_t dim_w = screen->dim_w;
-    const uint16_t dim_h = screen->dim_h;
-
     if(screen->pixels == NULL) {
         vga_set_mode(0x13);
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
-        uint16_t     pos_x = 0;
-        uint16_t     pos_y = 0;
-        uint8_t far* pixel = screen->pixels;
-        for(pos_y = 0; pos_y < dim_h; ++pos_y) {
-            for(pos_x = 0; pos_x < dim_w; ++pos_x) {
-                *pixel++ = UINT8_T(0);
+        const uint16_t dst_w = screen->dim_w;
+        const uint16_t dst_h = screen->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = screen->pixels;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                *dst_p++ = UINT8_T(0);
             }
         }
     }
@@ -273,12 +272,12 @@ void screen_fini(Screen* screen)
 
 void screen_update(Screen* screen, Plasma* plasma)
 {
-    const uint16_t src_w = plasma->effect.dim_w;
-    const uint16_t src_h = plasma->effect.dim_h;
-    const uint16_t dst_w = screen->dim_w;
-    uint8_t far*   src_p = plasma->effect.pixels;
-    uint8_t far*   dst_1 = (screen->pixels + (0 * dst_w));
-    uint8_t far*   dst_2 = (screen->pixels + (1 * dst_w));
+    const uint16_t     src_w = plasma->effect.dim_w;
+    const uint16_t     src_h = plasma->effect.dim_h;
+    const uint8_t far* src_p = plasma->effect.pixels;
+    const uint16_t     dst_w = screen->dim_w;
+    uint8_t far*       dst_1 = (screen->pixels + (0 * dst_w));
+    uint8_t far*       dst_2 = (screen->pixels + (1 * dst_w));
 
     /* wait for vbl */ {
         vga_wait_vbl();
@@ -292,7 +291,6 @@ void screen_update(Screen* screen, Plasma* plasma)
         uint16_t       pal_r = plasma->effect.pal_r + inc_r;
         uint16_t       pal_g = plasma->effect.pal_g + inc_g;
         uint16_t       pal_b = plasma->effect.pal_b + inc_b;
-
         plasma->effect.pal_r = pal_r;
         plasma->effect.pal_g = pal_g;
         plasma->effect.pal_b = pal_b;
@@ -303,11 +301,11 @@ void screen_update(Screen* screen, Plasma* plasma)
             pal_b += inc_b;
         }
     }
-    /* update_screen */ {
-        uint16_t pos_x = 0;
-        uint16_t pos_y = 0;
-        for(pos_y = src_h; pos_y != 0; --pos_y) {
-            for(pos_x = src_w; pos_x != 0; --pos_x) {
+    /* blit to screen */ {
+        uint16_t src_x = 0;
+        uint16_t src_y = 0;
+        for(src_y = src_h; src_y != 0; --src_y) {
+            for(src_x = src_w; src_x != 0; --src_x) {
                 const uint8_t pixel = *src_p++;
                 *dst_1++ = pixel;
                 *dst_1++ = pixel;
@@ -328,19 +326,18 @@ void screen_update(Screen* screen, Plasma* plasma)
 
 void effect_init(Effect* effect)
 {
-    const uint16_t dim_w = effect->dim_w;
-    const uint16_t dim_h = effect->dim_h;
-
     if(effect->pixels == NULL) {
-        effect->pixels = (uint8_t far*) malloc(dim_h * dim_w);
+        effect->pixels = (uint8_t far*) malloc(effect->dim_h * effect->dim_w);
     }
     if(effect->pixels != NULL) {
-        uint16_t     pos_x = 0;
-        uint16_t     pos_y = 0;
-        uint8_t far* pixel = effect->pixels;
-        for(pos_y = 0; pos_y < dim_h; ++pos_y) {
-            for(pos_x = 0; pos_x < dim_w; ++pos_x) {
-                *pixel++ = UINT8_T(0);
+        const uint16_t dst_w = effect->dim_w;
+        const uint16_t dst_h = effect->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = effect->pixels;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                *dst_p++ = UINT8_T(0);
             }
         }
     }
@@ -356,25 +353,32 @@ void effect_fini(Effect* effect)
 
 void effect_update(Effect* effect, Plasma* plasma)
 {
-    uint16_t dim_w = effect->dim_w, pos_x = 0;
-    uint16_t dim_h = effect->dim_h, pos_y = 0;
-    uint8_t far* dst  = effect->pixels;
-    uint8_t far* src1 = NULL;
-    uint8_t far* src2 = NULL;
-    uint8_t far* src3 = NULL;
-    uint8_t far* row1 = &plasma->image1.pixels[((plasma->image1.pos_y * plasma->image1.dim_w) + plasma->image1.pos_x)];
-    uint8_t far* row2 = &plasma->image2.pixels[((plasma->image2.pos_y * plasma->image2.dim_w) + plasma->image2.pos_x)];
-    uint8_t far* row3 = &plasma->image3.pixels[((plasma->image3.pos_y * plasma->image3.dim_w) + plasma->image3.pos_x)];
+    const uint16_t     dim_1 = plasma->image1.dim_w;
+    const uint16_t     dim_2 = plasma->image2.dim_w;
+    const uint16_t     dim_3 = plasma->image3.dim_w;
+    const uint8_t far* img_1 = &plasma->image1.pixels[(plasma->image1.pos_y * dim_1) + plasma->image1.pos_x];
+    const uint8_t far* img_2 = &plasma->image2.pixels[(plasma->image2.pos_y * dim_2) + plasma->image2.pos_x];
+    const uint8_t far* img_3 = &plasma->image3.pixels[(plasma->image3.pos_y * dim_3) + plasma->image3.pos_x];
 
-    for(pos_y = dim_h; pos_y != 0; --pos_y) {
-        src1 = row1; row1 += plasma->image1.dim_w;
-        src2 = row2; row2 += plasma->image2.dim_w;
-        src3 = row3; row3 += plasma->image3.dim_w;
-        for(pos_x = dim_w; pos_x != 0; --pos_x) {
-            *dst++ = *src1++
-                   + *src2++
-                   + *src3++
-                   ;
+    /* render the plasma */ {
+        const uint16_t dst_w = effect->dim_w;
+        const uint16_t dst_h = effect->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = effect->pixels;
+        for(dst_y = dst_h; dst_y != 0; --dst_y) {
+            const uint8_t far* src_1 = img_1;
+            const uint8_t far* src_2 = img_2;
+            const uint8_t far* src_3 = img_3;
+            for(dst_x = dst_w; dst_x != 0; --dst_x) {
+                *dst_p++ = *src_1++
+                         + *src_2++
+                         + *src_3++
+                         ;
+            }
+            img_1 += dim_1;
+            img_2 += dim_2;
+            img_3 += dim_3;
         }
     }
 }
@@ -387,21 +391,20 @@ void effect_update(Effect* effect, Plasma* plasma)
 
 void image1_init(Image1* image1)
 {
-    const uint16_t dim_w = image1->dim_w;
-    const uint16_t dim_h = image1->dim_h;
-
     if(image1->pixels == NULL) {
-        image1->pixels = (uint8_t far*) malloc(dim_h * dim_w);
+        image1->pixels = (uint8_t far*) malloc(image1->dim_h * image1->dim_w);
     }
     if(image1->pixels != NULL) {
-        uint16_t     pos_x = 0;
-        uint16_t     pos_y = 0;
-        uint8_t far* pixel = image1->pixels;
-        for(pos_y = 0; pos_y < dim_h; ++pos_y) {
-            for(pos_x = 0; pos_x < dim_w; ++pos_x) {
-                const int32_t dx = (INT32_T(pos_x) - INT32_T(dim_w / 2));
-                const int32_t dy = (INT32_T(pos_y) - INT32_T(dim_h / 2));
-                *pixel++ = UINT8_T(sqrt((dx * dx) + (dy * dy)) * 7.0);
+        const uint16_t dst_w = image1->dim_w;
+        const uint16_t dst_h = image1->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = image1->pixels;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                const int32_t dx = (INT32_T(dst_x) - INT32_T(dst_w / 2));
+                const int32_t dy = (INT32_T(dst_y) - INT32_T(dst_h / 2));
+                *dst_p++ = UINT8_T(sqrt((dx * dx) + (dy * dy)) * 7.0);
             }
         }
     }
@@ -415,11 +418,13 @@ void image1_fini(Image1* image1)
     }
 }
 
-void image1_update(Image1* image1, int16_t pos_x, int16_t pos_y, int16_t dim_w, int16_t dim_h)
+void image1_update(Image1* image1, int16_t px, int16_t py, int16_t dw, int16_t dh)
 {
-    image1->angle = ((image1->angle + image1->speed) & 1023);
-    image1->pos_x = (pos_x + ((dim_w * g_tables.cos[image1->angle]) >> 8));
-    image1->pos_y = (pos_y + ((dim_h * g_tables.sin[image1->angle]) >> 8));
+    const uint16_t angle = ((image1->angle + image1->speed) & 1023);
+
+    image1->angle = angle;
+    image1->pos_x = (px + ((dw * g_tables.cos[angle]) >> 8));
+    image1->pos_y = (py + ((dh * g_tables.sin[angle]) >> 8));
 }
 
 /*
@@ -430,21 +435,20 @@ void image1_update(Image1* image1, int16_t pos_x, int16_t pos_y, int16_t dim_w, 
 
 void image2_init(Image2* image2)
 {
-    const uint16_t dim_w = image2->dim_w;
-    const uint16_t dim_h = image2->dim_h;
-
     if(image2->pixels == NULL) {
-        image2->pixels = (uint8_t far*) malloc(dim_h * dim_w);
+        image2->pixels = (uint8_t far*) malloc(image2->dim_h * image2->dim_w);
     }
     if(image2->pixels != NULL) {
-        uint16_t     pos_x = 0;
-        uint16_t     pos_y = 0;
-        uint8_t far* pixel = image2->pixels;
-        for(pos_y = 0; pos_y < dim_h; ++pos_y) {
-            for(pos_x = 0; pos_x < dim_w; ++pos_x) {
-                const int32_t dx = (INT32_T(pos_x) - INT32_T(dim_w / 2));
-                const int32_t dy = (INT32_T(pos_y) - INT32_T(dim_h / 2));
-                *pixel++ = UINT8_T((1.0 + sin(sqrt((dx * dx) + (dy * dy)) / 11.0)) * 127.5);
+        const uint16_t dst_w = image2->dim_w;
+        const uint16_t dst_h = image2->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = image2->pixels;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                const int32_t dx = (INT32_T(dst_x) - INT32_T(dst_w / 2));
+                const int32_t dy = (INT32_T(dst_y) - INT32_T(dst_h / 2));
+                *dst_p++ = UINT8_T((1.0 + sin(sqrt((dx * dx) + (dy * dy)) / 11.0)) * 127.5);
             }
         }
     }
@@ -458,11 +462,13 @@ void image2_fini(Image2* image2)
     }
 }
 
-void image2_update(Image2* image2, int16_t pos_x, int16_t pos_y, int16_t dim_w, int16_t dim_h)
+void image2_update(Image2* image2, int16_t px, int16_t py, int16_t dw, int16_t dh)
 {
-    image2->angle = ((image2->angle + image2->speed) & 1023);
-    image2->pos_x = (pos_x + ((dim_w * g_tables.cos[image2->angle]) >> 8));
-    image2->pos_y = (pos_y + ((dim_h * g_tables.sin[image2->angle]) >> 8));
+    const uint16_t angle = ((image2->angle + image2->speed) & 1023);
+
+    image2->angle = angle;
+    image2->pos_x = (px + ((dw * g_tables.cos[angle]) >> 8));
+    image2->pos_y = (py + ((dh * g_tables.sin[angle]) >> 8));
 }
 
 /*
@@ -473,21 +479,20 @@ void image2_update(Image2* image2, int16_t pos_x, int16_t pos_y, int16_t dim_w, 
 
 void image3_init(Image3* image3)
 {
-    const uint16_t dim_w = image3->dim_w;
-    const uint16_t dim_h = image3->dim_h;
-
     if(image3->pixels == NULL) {
-        image3->pixels = (uint8_t far*) malloc(dim_h * dim_w);
+        image3->pixels = (uint8_t far*) malloc(image3->dim_h * image3->dim_w);
     }
     if(image3->pixels != NULL) {
-        uint16_t     pos_x = 0;
-        uint16_t     pos_y = 0;
-        uint8_t far* pixel = image3->pixels;
-        for(pos_y = 0; pos_y < dim_h; ++pos_y) {
-            for(pos_x = 0; pos_x < dim_w; ++pos_x) {
-                const int32_t dx = (INT32_T(pos_x) - INT32_T(dim_w / 2));
-                const int32_t dy = (INT32_T(pos_y) - INT32_T(dim_h / 2));
-                *pixel++ = UINT8_T((1.0 + sin(sqrt((dx * dx) + (dy * dy)) / 19.0)) * 127.5);
+        const uint16_t dst_w = image3->dim_w;
+        const uint16_t dst_h = image3->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = image3->pixels;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                const int32_t dx = (INT32_T(dst_x) - INT32_T(dst_w / 2));
+                const int32_t dy = (INT32_T(dst_y) - INT32_T(dst_h / 2));
+                *dst_p++ = UINT8_T((1.0 + sin(sqrt((dx * dx) + (dy * dy)) / 19.0)) * 127.5);
             }
         }
     }
@@ -501,11 +506,13 @@ void image3_fini(Image3* image3)
     }
 }
 
-void image3_update(Image3* image3, int16_t pos_x, int16_t pos_y, int16_t dim_w, int16_t dim_h)
+void image3_update(Image3* image3, int16_t px, int16_t py, int16_t dw, int16_t dh)
 {
-    image3->angle = ((image3->angle + image3->speed) & 1023);
-    image3->pos_x = (pos_x + ((dim_w * g_tables.cos[image3->angle]) >> 8));
-    image3->pos_y = (pos_y + ((dim_h * g_tables.sin[image3->angle]) >> 8));
+    const uint16_t angle = ((image3->angle + image3->speed) & 1023);
+
+    image3->angle = angle;
+    image3->pos_x = (px + ((dw * g_tables.cos[angle]) >> 8));
+    image3->pos_y = (py + ((dh * g_tables.sin[angle]) >> 8));
 }
 
 /*
@@ -525,15 +532,15 @@ void plasma_begin(Plasma* plasma)
 
 void plasma_loop(Plasma* plasma)
 {
-    const int16_t pos_x = (plasma->effect.dim_w / 2);
-    const int16_t pos_y = (plasma->effect.dim_h / 2);
-    const int16_t dim_w = (plasma->effect.dim_w / 2);
-    const int16_t dim_h = (plasma->effect.dim_h / 2);
+    const int16_t px = ((plasma->effect.dim_w / 2) + 0);
+    const int16_t py = ((plasma->effect.dim_h / 2) + 0);
+    const int16_t dw = ((plasma->effect.dim_w / 2) - 1);
+    const int16_t dh = ((plasma->effect.dim_h / 2) - 1);
 
     while(kbhit() == 0) {
-        image1_update(&plasma->image1, pos_x, pos_y, dim_w, dim_h);
-        image2_update(&plasma->image2, pos_x, pos_y, dim_w, dim_h);
-        image3_update(&plasma->image3, pos_x, pos_y, dim_w, dim_h);
+        image1_update(&plasma->image1, px, py, dw, dh);
+        image2_update(&plasma->image2, px, py, dw, dh);
+        image3_update(&plasma->image3, px, py, dw, dh);
         effect_update(&plasma->effect, plasma);
         screen_update(&plasma->screen, plasma);
     }
