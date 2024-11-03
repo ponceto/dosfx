@@ -25,3 +25,11 @@ The fullscreen scaler effect is a well-known visual technique from the 90s demos
 In the demoscene, the fullscreen scaler became a hallmark of coding skill, as it demonstrated both an understanding of graphics processing and a talent for creating visually impressive results on limited hardware. This effect played a significant role in establishing the fast-paced, visually intense style characteristic of 90s demos.
 
 ![Scaler](SCALER/scaler.png)
+
+## WOBBLE
+
+The wobble effect is a distinctive visual technique from the 90s demoscene, where an image, texture, or object appears to ripple or oscillate as if moving through waves or under water. This effect creates a fluid, dynamic look, making the graphic appear as if it’s bending, stretching, or vibrating in sync with a sine wave pattern.
+
+In the demoscene, the wobble effect became iconic for its captivating, hypnotic movement and for showcasing a coder’s skill in manipulating graphics at the pixel level. This effect contributed to the surreal, otherworldly aesthetic of 90s demos and remains a memorable example of creative programming on early computers.
+
+![Wobble](WOBBLE/wobble.png)
