@@ -89,14 +89,25 @@ uint8_t far* free_buffer(uint8_t far* buffer)
  * ---------------------------------------------------------------------------
  */
 
-void vga_set_mode(uint8_t mode)
+uint8_t vga_set_mode(uint8_t mode)
 {
-    union REGS regs;
+    uint8_t prev = 0x00;
 
-    regs.h.ah = 0x00;
-    regs.h.al = mode;
-
-    (void) int86(0x10, &regs, &regs);
+    /* get old mode */ {
+        union REGS regs;
+        regs.h.ah = 0x0f;
+        regs.h.al = prev;
+        (void) int86(0x10, &regs, &regs);
+        prev = regs.h.al;
+    }
+    /* set new mode */ {
+        union REGS regs;
+        regs.h.ah = 0x00;
+        regs.h.al = mode;
+        (void) int86(0x10, &regs, &regs);
+        mode = regs.h.al;
+    }
+    return prev;
 }
 
 void vga_set_color(uint8_t color, uint8_t r, uint8_t g, uint8_t b)
@@ -123,7 +134,7 @@ void vga_wait_vbl(void)
  */
 
 typedef struct _Screen  Screen;
-typedef struct _Plasma  Plasma;
+typedef struct _Effect  Effect;
 typedef struct _Buffer  Image1;
 typedef struct _Buffer  Image2;
 typedef struct _Buffer  Image3;
@@ -132,12 +143,14 @@ typedef struct _Program Program;
 
 struct _Screen
 {
+    uint8_t      v_mode;
+    uint8_t      p_mode;
     uint16_t     dim_w;
     uint16_t     dim_h;
     uint8_t far* pixels;
 };
 
-struct _Plasma
+struct _Effect
 {
     uint16_t     dim_w;
     uint16_t     dim_h;
@@ -170,7 +183,7 @@ struct _Globals
 struct _Program
 {
     Screen screen;
-    Plasma plasma;
+    Effect effect;
     Image1 image1;
     Image2 image2;
     Image3 image3;
@@ -184,52 +197,54 @@ struct _Program
 
 Globals g_globals = {
     { 0 }, /* sin */
-    { 0 }  /* cos */
+    { 0 }, /* cos */
 };
 
 Program g_program = {
     /* screen */ {
-        320,  /* dim_w  */
-        200,  /* dim_h  */
-        NULL  /* pixels */
+        0,   /* v_mode */
+        0,   /* p_mode */
+        0,   /* dim_w  */
+        0,   /* dim_h  */
+        NULL /* pixels */
     },
-    /* plasma */ {
-        160,  /* dim_w  */
-        100,  /* dim_h  */
-        0,    /* pal_r  */
-        0,    /* pal_g  */
-        0,    /* pal_b  */
-        101,  /* inc_r  */
-        127,  /* inc_g  */
-        257,  /* inc_b  */
-        NULL  /* pixels */
+    /* effect */ {
+        160, /* dim_w  */
+        100, /* dim_h  */
+        0,   /* pal_r  */
+        0,   /* pal_g  */
+        0,   /* pal_b  */
+        101, /* inc_r  */
+        127, /* inc_g  */
+        257, /* inc_b  */
+        NULL /* pixels */
     },
     /* image1 */ {
-        320,  /* dim_w  */
-        200,  /* dim_h  */
-        0,    /* pos_x  */
-        0,    /* pos_y  */
-        0,    /* angle  */
-        -5,   /* speed  */
-        NULL  /* pixels */
+        320, /* dim_w  */
+        200, /* dim_h  */
+        0,   /* pos_x  */
+        0,   /* pos_y  */
+        0,   /* angle  */
+        -5,  /* speed  */
+        NULL /* pixels */
     },
     /* image2 */ {
-        320,  /* dim_w  */
-        200,  /* dim_h  */
-        0,    /* pos_x  */
-        0,    /* pos_y  */
-        0,    /* angle  */
-        +2,   /* speed  */
-        NULL  /* pixels */
+        320, /* dim_w  */
+        200, /* dim_h  */
+        0,   /* pos_x  */
+        0,   /* pos_y  */
+        0,   /* angle  */
+        +2,  /* speed  */
+        NULL /* pixels */
     },
     /* image3 */ {
-        320,  /* dim_w  */
-        200,  /* dim_h  */
-        0,    /* pos_x  */
-        0,    /* pos_y  */
-        0,    /* angle  */
-        +3,   /* speed  */
-        NULL  /* pixels */
+        320, /* dim_w  */
+        200, /* dim_h  */
+        0,   /* pos_x  */
+        0,   /* pos_y  */
+        0,   /* angle  */
+        +3,  /* speed  */
+        NULL /* pixels */
     },
 };
 
@@ -242,7 +257,10 @@ Program g_program = {
 void screen_init(Screen* screen)
 {
     if(screen->pixels == NULL) {
-        vga_set_mode(0x13);
+        screen->v_mode = 0x13;
+        screen->p_mode = vga_set_mode(screen->v_mode);
+        screen->dim_w  = 320;
+        screen->dim_h  = 200;
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
@@ -272,12 +290,67 @@ void screen_init(Screen* screen)
 void screen_fini(Screen* screen)
 {
     if(screen->pixels != NULL) {
-        vga_set_mode(0x03);
+        screen->v_mode = screen->p_mode;
+        screen->p_mode = vga_set_mode(screen->v_mode);
+        screen->dim_w  = 0;
+        screen->dim_h  = 0;
         screen->pixels = NULL;
     }
 }
 
-void screen_update(Screen* screen, Plasma* plasma)
+/*
+ * ---------------------------------------------------------------------------
+ * effect
+ * ---------------------------------------------------------------------------
+ */
+
+void effect_init(Effect* effect)
+{
+    if(effect->pixels == NULL) {
+        effect->pixels = alloc_buffer(effect->dim_h, effect->dim_w);
+    }
+}
+
+void effect_fini(Effect* effect)
+{
+    if(effect->pixels != NULL) {
+        effect->pixels = free_buffer(effect->pixels);
+    }
+}
+
+void effect_update(Effect* effect, Program* program)
+{
+    const uint16_t     dim_1 = program->image1.dim_w;
+    const uint16_t     dim_2 = program->image2.dim_w;
+    const uint16_t     dim_3 = program->image3.dim_w;
+    const uint8_t far* img_1 = &program->image1.pixels[(program->image1.pos_y * dim_1) + program->image1.pos_x];
+    const uint8_t far* img_2 = &program->image2.pixels[(program->image2.pos_y * dim_2) + program->image2.pos_x];
+    const uint8_t far* img_3 = &program->image3.pixels[(program->image3.pos_y * dim_3) + program->image3.pos_x];
+
+    /* render the effect */ {
+        const uint16_t dst_w = effect->dim_w;
+        const uint16_t dst_h = effect->dim_h;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        uint8_t far*   dst_p = effect->pixels;
+        for(dst_y = dst_h; dst_y != 0; --dst_y) {
+            const uint8_t far* src_1 = img_1;
+            const uint8_t far* src_2 = img_2;
+            const uint8_t far* src_3 = img_3;
+            for(dst_x = dst_w; dst_x != 0; --dst_x) {
+                *dst_p++ = *src_1++
+                         + *src_2++
+                         + *src_3++
+                         ;
+            }
+            img_1 += dim_1;
+            img_2 += dim_2;
+            img_3 += dim_3;
+        }
+    }
+}
+
+void effect_render(Effect* effect, Screen* screen)
 {
     /* wait for vbl */ {
         vga_wait_vbl();
@@ -285,15 +358,15 @@ void screen_update(Screen* screen, Plasma* plasma)
     /* update_colors */ {
         uint16_t       index = 0;
         const uint16_t count = 256;
-        const uint16_t inc_r = plasma->inc_r;
-        const uint16_t inc_g = plasma->inc_g;
-        const uint16_t inc_b = plasma->inc_b;
-        uint16_t       pal_r = plasma->pal_r + inc_r;
-        uint16_t       pal_g = plasma->pal_g + inc_g;
-        uint16_t       pal_b = plasma->pal_b + inc_b;
-        plasma->pal_r = pal_r;
-        plasma->pal_g = pal_g;
-        plasma->pal_b = pal_b;
+        const uint16_t inc_r = effect->inc_r;
+        const uint16_t inc_g = effect->inc_g;
+        const uint16_t inc_b = effect->inc_b;
+        uint16_t       pal_r = effect->pal_r + inc_r;
+        uint16_t       pal_g = effect->pal_g + inc_g;
+        uint16_t       pal_b = effect->pal_b + inc_b;
+        effect->pal_r = pal_r;
+        effect->pal_g = pal_g;
+        effect->pal_b = pal_b;
         for(index = 0; index < count; ++index) {
             vga_set_color(index, (pal_r >> 8), (pal_g >> 8), (pal_b >> 8));
             pal_r += inc_r;
@@ -301,10 +374,10 @@ void screen_update(Screen* screen, Plasma* plasma)
             pal_b += inc_b;
         }
     }
-    /* blit to screen */ {
-        const uint16_t     src_w = plasma->dim_w;
-        const uint16_t     src_h = plasma->dim_h;
-        const uint8_t far* src_p = plasma->pixels;
+    /* render the effect */ {
+        const uint16_t     src_w = effect->dim_w;
+        const uint16_t     src_h = effect->dim_h;
+        const uint8_t far* src_p = effect->pixels;
         uint8_t far*       dst_p = screen->pixels;
         uint16_t           cnt_x = 0;
         uint16_t           cnt_y = 0;
@@ -320,58 +393,6 @@ void screen_update(Screen* screen, Plasma* plasma)
                 *dst_p++ = pixel;
                 *dst_p++ = pixel;
             }
-        }
-    }
-}
-
-/*
- * ---------------------------------------------------------------------------
- * plasma
- * ---------------------------------------------------------------------------
- */
-
-void plasma_init(Plasma* plasma)
-{
-    if(plasma->pixels == NULL) {
-        plasma->pixels = alloc_buffer(plasma->dim_h, plasma->dim_w);
-    }
-}
-
-void plasma_fini(Plasma* plasma)
-{
-    if(plasma->pixels != NULL) {
-        plasma->pixels = free_buffer(plasma->pixels);
-    }
-}
-
-void plasma_update(Plasma* plasma, Program* program)
-{
-    const uint16_t     dim_1 = program->image1.dim_w;
-    const uint16_t     dim_2 = program->image2.dim_w;
-    const uint16_t     dim_3 = program->image3.dim_w;
-    const uint8_t far* img_1 = &program->image1.pixels[(program->image1.pos_y * dim_1) + program->image1.pos_x];
-    const uint8_t far* img_2 = &program->image2.pixels[(program->image2.pos_y * dim_2) + program->image2.pos_x];
-    const uint8_t far* img_3 = &program->image3.pixels[(program->image3.pos_y * dim_3) + program->image3.pos_x];
-
-    /* render the plasma */ {
-        const uint16_t dst_w = plasma->dim_w;
-        const uint16_t dst_h = plasma->dim_h;
-        uint16_t       dst_x = 0;
-        uint16_t       dst_y = 0;
-        uint8_t far*   dst_p = plasma->pixels;
-        for(dst_y = dst_h; dst_y != 0; --dst_y) {
-            const uint8_t far* src_1 = img_1;
-            const uint8_t far* src_2 = img_2;
-            const uint8_t far* src_3 = img_3;
-            for(dst_x = dst_w; dst_x != 0; --dst_x) {
-                *dst_p++ = *src_1++
-                         + *src_2++
-                         + *src_3++
-                         ;
-            }
-            img_1 += dim_1;
-            img_2 += dim_2;
-            img_3 += dim_3;
         }
     }
 }
@@ -538,7 +559,7 @@ void globals_fini(Globals* globals)
 void program_begin(Program* program)
 {
     screen_init(&program->screen);
-    plasma_init(&program->plasma);
+    effect_init(&program->effect);
     image1_init(&program->image1);
     image2_init(&program->image2);
     image3_init(&program->image3);
@@ -546,17 +567,17 @@ void program_begin(Program* program)
 
 void program_loop(Program* program)
 {
-    const int16_t px = ((program->plasma.dim_w / 2) + 0);
-    const int16_t py = ((program->plasma.dim_h / 2) + 0);
-    const int16_t dw = ((program->plasma.dim_w / 2) - 1);
-    const int16_t dh = ((program->plasma.dim_h / 2) - 1);
+    const int16_t px = ((program->effect.dim_w / 2) + 0);
+    const int16_t py = ((program->effect.dim_h / 2) + 0);
+    const int16_t dw = ((program->effect.dim_w / 2) - 1);
+    const int16_t dh = ((program->effect.dim_h / 2) - 1);
 
     while(kbhit() == 0) {
         image1_update(&program->image1, px, py, dw, dh);
         image2_update(&program->image2, px, py, dw, dh);
         image3_update(&program->image3, px, py, dw, dh);
-        plasma_update(&program->plasma, program);
-        screen_update(&program->screen, &program->plasma);
+        effect_update(&program->effect, program);
+        effect_render(&program->effect, &program->screen);
     }
     while(kbhit() != 0) {
         (void) getch();
@@ -568,7 +589,7 @@ void program_end(Program* program)
     image3_fini(&program->image3);
     image2_fini(&program->image2);
     image1_fini(&program->image1);
-    plasma_fini(&program->plasma);
+    effect_fini(&program->effect);
     screen_fini(&program->screen);
 }
 

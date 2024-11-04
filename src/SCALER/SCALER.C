@@ -89,14 +89,25 @@ uint8_t far* free_buffer(uint8_t far* buffer)
  * ---------------------------------------------------------------------------
  */
 
-void vga_set_mode(uint8_t mode)
+uint8_t vga_set_mode(uint8_t mode)
 {
-    union REGS regs;
+    uint8_t prev = 0x00;
 
-    regs.h.ah = 0x00;
-    regs.h.al = mode;
-
-    (void) int86(0x10, &regs, &regs);
+    /* get old mode */ {
+        union REGS regs;
+        regs.h.ah = 0x0f;
+        regs.h.al = prev;
+        (void) int86(0x10, &regs, &regs);
+        prev = regs.h.al;
+    }
+    /* set new mode */ {
+        union REGS regs;
+        regs.h.ah = 0x00;
+        regs.h.al = mode;
+        (void) int86(0x10, &regs, &regs);
+        mode = regs.h.al;
+    }
+    return prev;
 }
 
 void vga_set_color(uint8_t color, uint8_t r, uint8_t g, uint8_t b)
@@ -403,18 +414,20 @@ void pcx_reader_load(PCX_Reader* reader, const char* filename)
  */
 
 typedef struct _Screen  Screen;
-typedef struct _Buffer  Buffer;
+typedef struct _Effect  Effect;
 typedef struct _Globals Globals;
 typedef struct _Program Program;
 
 struct _Screen
 {
+    uint8_t      v_mode;
+    uint8_t      p_mode;
     uint16_t     dim_w;
     uint16_t     dim_h;
     uint8_t far* pixels;
 };
 
-struct _Buffer
+struct _Effect
 {
     uint16_t     dim_w;
     uint16_t     dim_h;
@@ -433,7 +446,7 @@ struct _Globals
 struct _Program
 {
     Screen screen;
-    Buffer buffer;
+    Effect effect;
 };
 
 /*
@@ -445,21 +458,23 @@ struct _Program
 Globals g_globals = {
     { 0 }, /* sin */
     { 0 }, /* cos */
-    { 0 }  /* mul */
+    { 0 }, /* mul */
 };
 
 Program g_program = {
     /* screen */ {
-        320,  /* dim_w  */
-        200,  /* dim_h  */
-        NULL  /* pixels */
+        0,   /* v_mode */
+        0,   /* p_mode */
+        0,   /* dim_w  */
+        0,   /* dim_h  */
+        NULL /* pixels */
     },
-    /* buffer */ {
-        320,  /* dim_w  */
-        200,  /* dim_h  */
-        0,    /* angle  */
-        5,    /* speed  */
-        NULL  /* pixels */
+    /* effect */ {
+        320, /* dim_w  */
+        200, /* dim_h  */
+        0,   /* angle  */
+        5,   /* speed  */
+        NULL /* pixels */
     },
 };
 
@@ -472,7 +487,10 @@ Program g_program = {
 void screen_init(Screen* screen)
 {
     if(screen->pixels == NULL) {
-        vga_set_mode(0x13);
+        screen->v_mode = 0x13;
+        screen->p_mode = vga_set_mode(screen->v_mode);
+        screen->dim_w  = 320;
+        screen->dim_h  = 200;
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
@@ -502,27 +520,80 @@ void screen_init(Screen* screen)
 void screen_fini(Screen* screen)
 {
     if(screen->pixels != NULL) {
-        vga_set_mode(0x03);
+        screen->v_mode = screen->p_mode;
+        screen->p_mode = vga_set_mode(screen->v_mode);
+        screen->dim_w  = 0;
+        screen->dim_h  = 0;
         screen->pixels = NULL;
     }
 }
 
-void screen_update(Screen* screen, Buffer* buffer)
+/*
+ * ---------------------------------------------------------------------------
+ * effect
+ * ---------------------------------------------------------------------------
+ */
+
+void effect_init(Effect* effect)
 {
-    const int16_t  scale = g_globals.mul[buffer->angle];
-    const uint16_t img_w = ((UINT16_T((UINT32_T(buffer->dim_w) * scale) >> 8) + 1) & ~1);
-    const uint16_t img_h = ((UINT16_T((UINT32_T(buffer->dim_h) * scale) >> 8) + 1) & ~1);
-    const uint16_t img_x = ((buffer->dim_w - img_w) >> 1);
-    const uint16_t img_y = ((buffer->dim_h - img_h) >> 1);
+    if(effect->pixels == NULL) {
+        PCX_Reader reader = { 0 };
+        pcx_reader_init(&reader);
+        pcx_reader_load(&reader, "image.pcx");
+        if(reader.status == PCX_SUCCESS) {
+            effect->dim_w  = reader.dim_w;
+            effect->dim_h  = reader.dim_h;
+            effect->pixels = reader.pixels;
+            reader.dim_w   = 0;
+            reader.dim_h   = 0;
+            reader.pixels  = NULL;
+        }
+        if(reader.status == PCX_SUCCESS) {
+            uint16_t       index = 0;
+            const uint16_t count = 256;
+            uint8_t far*   value = reader.footer.palette;
+            for(index = 0; index < count; ++index) {
+                const uint8_t pal_r = *value++;
+                const uint8_t pal_g = *value++;
+                const uint8_t pal_b = *value++;
+                vga_set_color(index, pal_r, pal_g, pal_b);
+            }
+        }
+        pcx_reader_fini(&reader);
+    }
+    if(effect->pixels == NULL) {
+        effect->pixels = alloc_buffer(effect->dim_h, effect->dim_w);
+    }
+}
+
+void effect_fini(Effect* effect)
+{
+    if(effect->pixels != NULL) {
+        effect->pixels = free_buffer(effect->pixels);
+    }
+}
+
+void effect_update(Effect* effect)
+{
+    effect->angle = ((effect->angle + effect->speed) & 1023);
+}
+
+void effect_render(Effect* effect, Screen* screen)
+{
+    const int16_t  scale = g_globals.mul[effect->angle];
+    const uint16_t img_w = ((UINT16_T((UINT32_T(effect->dim_w) * scale) >> 8) + 1) & ~1);
+    const uint16_t img_h = ((UINT16_T((UINT32_T(effect->dim_h) * scale) >> 8) + 1) & ~1);
+    const uint16_t img_x = ((effect->dim_w - img_w) >> 1);
+    const uint16_t img_y = ((effect->dim_h - img_h) >> 1);
 
     /* wait for vbl */ {
         vga_wait_vbl();
     }
-    /* render the zoom */ {
+    /* render the effect */ {
         const uint16_t     src_w = img_w;
         const uint16_t     src_h = img_h;
-        const uint16_t     src_s = ((buffer->dim_w + 1) & ~1);
-        const uint8_t far* src_p = &buffer->pixels[img_y * src_s + img_x];
+        const uint16_t     src_s = ((effect->dim_w + 1) & ~1);
+        const uint8_t far* src_p = &effect->pixels[img_y * src_s + img_x];
         const uint16_t     dst_w = screen->dim_w;
         const uint16_t     dst_h = screen->dim_h;
         const uint16_t     dst_s = ((screen->dim_w + 1) & ~1);
@@ -551,56 +622,6 @@ void screen_update(Screen* screen, Buffer* buffer)
             }
         }
     }
-}
-
-/*
- * ---------------------------------------------------------------------------
- * buffer
- * ---------------------------------------------------------------------------
- */
-
-void buffer_init(Buffer* buffer)
-{
-    if(buffer->pixels == NULL) {
-        PCX_Reader reader = { 0 };
-        pcx_reader_init(&reader);
-        pcx_reader_load(&reader, "image.pcx");
-        if(reader.status == PCX_SUCCESS) {
-            buffer->dim_w  = reader.dim_w;
-            buffer->dim_h  = reader.dim_h;
-            buffer->pixels = reader.pixels;
-            reader.dim_w   = 0;
-            reader.dim_h   = 0;
-            reader.pixels  = NULL;
-        }
-        if(reader.status == PCX_SUCCESS) {
-            uint16_t       index = 0;
-            const uint16_t count = 256;
-            uint8_t far*   value = reader.footer.palette;
-            for(index = 0; index < count; ++index) {
-                const uint8_t pal_r = *value++;
-                const uint8_t pal_g = *value++;
-                const uint8_t pal_b = *value++;
-                vga_set_color(index, pal_r, pal_g, pal_b);
-            }
-        }
-        pcx_reader_fini(&reader);
-    }
-    if(buffer->pixels == NULL) {
-        buffer->pixels = alloc_buffer(buffer->dim_h, buffer->dim_w);
-    }
-}
-
-void buffer_fini(Buffer* buffer)
-{
-    if(buffer->pixels != NULL) {
-        buffer->pixels = free_buffer(buffer->pixels);
-    }
-}
-
-void buffer_update(Buffer* buffer)
-{
-    buffer->angle = ((buffer->angle + buffer->speed) & 1023);
 }
 
 /*
@@ -637,14 +658,14 @@ void globals_fini(Globals* globals)
 void program_begin(Program* program)
 {
     screen_init(&program->screen);
-    buffer_init(&program->buffer);
+    effect_init(&program->effect);
 }
 
 void program_loop(Program* program)
 {
     while(kbhit() == 0) {
-        buffer_update(&program->buffer);
-        screen_update(&program->screen, &program->buffer);
+        effect_update(&program->effect);
+        effect_render(&program->effect, &program->screen);
     }
     while(kbhit() != 0) {
         (void) getch();
@@ -653,7 +674,7 @@ void program_loop(Program* program)
 
 void program_end(Program* program)
 {
-    buffer_fini(&program->buffer);
+    effect_fini(&program->effect);
     screen_fini(&program->screen);
 }
 
