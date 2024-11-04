@@ -30,6 +30,14 @@ In the demoscene, the fullscreen scaler became a hallmark of coding skill, as it
 
 ![Scaler](doc/scaler.png)
 
+### TUNNEL
+
+The tunnel effect is a classic visual technique from the 90s demoscene, where a graphic simulates a 3D tunnel that appears to endlessly zoom toward or away from the viewer, creating a captivating sense of depth and motion. This effect gives the illusion of traveling through a cylindrical or vortex-like space, often lined with textures or patterns that seem to flow around the edges of the screen, enhancing the immersive feel.
+
+In the demoscene, the tunnel effect became iconic as a display of both technical skill and visual artistry, capturing viewers' attention with its immersive 3D appearance. This effect played a significant role in defining the fast-paced, surreal aesthetics that characterized many demos of the era.
+
+![Tunnel](doc/tunnel.png)
+
 ### WOBBLE
 
 The wobble effect is a distinctive visual technique from the 90s demoscene, where an image, texture, or object appears to ripple or oscillate as if moving through waves or under water. This effect creates a fluid, dynamic look, making the graphic appear as if it’s bending, stretching, or vibrating in sync with a sine wave pattern.
