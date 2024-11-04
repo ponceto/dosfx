@@ -38,6 +38,62 @@ In the demoscene, the wobble effect became iconic for its captivating, hypnotic 
 
 ![Wobble](doc/wobble.png)
 
+## CONFIGURE, BUILD AND RUN
+
+### Launch Turbo C
+
+![Build step 000](doc/tc_000.png)
+
+![Build step 001](doc/tc_001.png)
+
+### Set primary C file
+
+![Build step 002](doc/tc_002.png)
+
+![Build step 003](doc/tc_003.png)
+
+### Set large memory model
+
+![Build step 004](doc/tc_004.png)
+
+### Set code generation
+
+![Build step 005](doc/tc_005.png)
+
+### Set optimize for speed
+
+![Build step 006](doc/tc_006.png)
+
+### Set register optimization
+
+![Build step 007](doc/tc_007.png)
+
+### Set jump optimization
+
+![Build step 008](doc/tc_008.png)
+
+### Unset graphics library
+
+![Build step 009](doc/tc_009.png)
+
+### Save options
+
+![Build step 010](doc/tc_010.png)
+
+### Build all
+
+![Build step 011](doc/tc_011.png)
+
+![Build step 012](doc/tc_012.png)
+
+![Build step 013](doc/tc_013.png)
+
+![Build step 014](doc/tc_014.png)
+
+### Run
+
+![Build step 015](doc/tc_015.png)
+
 ## LICENSE
 
 This project is released under the terms of the General Public License version 2.
