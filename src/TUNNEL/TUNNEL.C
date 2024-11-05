@@ -436,8 +436,8 @@ struct _Effect
     uint16_t     inc_x;
     uint16_t     inc_y;
     uint8_t far* pixels;
-    uint8_t far* radius;
-    uint8_t far* angles;
+    uint8_t far* depth;
+    uint8_t far* angle;
 };
 
 struct _Globals
@@ -479,8 +479,8 @@ Program g_program = {
         3,    /* inc_x  */
         1,    /* inc_y  */
         NULL, /* pixels */
-        NULL, /* radius */
-        NULL  /* angles */
+        NULL, /* depth  */
+        NULL  /* angle  */
     },
 };
 
@@ -570,41 +570,47 @@ void effect_init(Effect* effect)
     if(effect->pixels == NULL) {
         effect->pixels = alloc_buffer(effect->dim_h, effect->dim_w);
     }
-    if(effect->radius == NULL) {
-        effect->radius = alloc_buffer(effect->dim_h, effect->dim_w);
-        if(effect->radius != NULL) {
-            const uint16_t dst_w = effect->dim_w;
-            const uint16_t dst_h = effect->dim_h;
-            uint8_t far*   dst_p = effect->radius;
-            uint16_t       dst_x = 0;
-            uint16_t       dst_y = 0;
-            for(dst_y = 0; dst_y < dst_h; ++dst_y) {
-                const double y = DOUBLE(INT32_T(dst_y) - INT32_T(dst_h / 2));
-                for(dst_x = 0; dst_x < dst_w; ++dst_x) {
-                    const double x = DOUBLE(INT32_T(dst_x) - INT32_T(dst_w / 2));
-                    *dst_p++ = UINT8_T(1.0 + sqrt((y * y) + (x * x)));
-                }
+    if(effect->depth == NULL) {
+        effect->depth = alloc_buffer(effect->dim_h, effect->dim_w);
+    }
+    if(effect->depth != NULL) {
+        const uint16_t dst_w = effect->dim_w;
+        const uint16_t dst_h = effect->dim_h;
+        const uint16_t mid_w = (dst_w / 2);
+        const uint16_t mid_h = (dst_h / 2);
+        const double   max_d = hypot(DOUBLE(mid_w), DOUBLE(mid_h));
+        uint8_t far*   dst_p = effect->depth;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            const double dy = DOUBLE(INT16_T(dst_y) - INT16_T(mid_h));
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                const double dx = DOUBLE(INT16_T(dst_x) - INT16_T(mid_w));
+                const double dz = hypot(dx, dy) / max_d;
+                *dst_p++ = 1 + UINT8_T(254.0 * dz);
             }
         }
     }
-    if(effect->angles == NULL) {
-        effect->angles = alloc_buffer(effect->dim_h, effect->dim_w);
-        if(effect->angles != NULL) {
-            const uint16_t dst_w = effect->dim_w;
-            const uint16_t dst_h = effect->dim_h;
-            uint8_t far*   dst_p = effect->angles;
-            uint16_t       dst_x = 0;
-            uint16_t       dst_y = 0;
-            for(dst_y = 0; dst_y < dst_h; ++dst_y) {
-                const double y = DOUBLE(INT32_T(dst_y) - INT32_T(dst_h / 2));
-                for(dst_x = 0; dst_x < dst_w; ++dst_x) {
-                    const double x = DOUBLE(INT32_T(dst_x) - INT32_T(dst_w / 2));
-                    if((y != 0.0) || (x != 0.0)) {
-                        *dst_p++ = UINT8_T(atan2(y, x) * 128.0 / M_PI);
-                    }
-                    else {
-                        *dst_p++ = UINT8_T(0);
-                    }
+    if(effect->angle == NULL) {
+        effect->angle = alloc_buffer(effect->dim_h, effect->dim_w);
+    }
+    if(effect->angle != NULL) {
+        const uint16_t dst_w = effect->dim_w;
+        const uint16_t dst_h = effect->dim_h;
+        const uint16_t mid_w = (dst_w / 2);
+        const uint16_t mid_h = (dst_h / 2);
+        uint8_t far*   dst_p = effect->angle;
+        uint16_t       dst_x = 0;
+        uint16_t       dst_y = 0;
+        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            const double dy = DOUBLE(INT16_T(dst_y) - INT16_T(mid_h));
+            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+                const double dx = DOUBLE(INT16_T(dst_x) - INT16_T(mid_w));
+                if((dx != 0.0) || (dy != 0.0)) {
+                    *dst_p++ = UINT8_T(128.0 * (atan2(dy, dx) / M_PI));
+                }
+                else {
+                    *dst_p++ = UINT8_T(0);
                 }
             }
         }
@@ -613,11 +619,11 @@ void effect_init(Effect* effect)
 
 void effect_fini(Effect* effect)
 {
-    if(effect->angles != NULL) {
-        effect->angles = free_buffer(effect->angles);
+    if(effect->angle != NULL) {
+        effect->angle = free_buffer(effect->angle);
     }
-    if(effect->radius != NULL) {
-        effect->radius = free_buffer(effect->radius);
+    if(effect->depth != NULL) {
+        effect->depth = free_buffer(effect->depth);
     }
     if(effect->pixels != NULL) {
         effect->pixels = free_buffer(effect->pixels);
@@ -638,8 +644,8 @@ void effect_render(Effect* effect, Screen* screen)
     const uint16_t     src_h = effect->dim_h;
     const uint16_t     src_s = ((effect->dim_w + 1) & ~1);
     const uint8_t far* src_p = effect->pixels;
-    const uint8_t far* src_r = effect->radius;
-    const uint8_t far* src_a = effect->angles;
+    const uint8_t far* src_d = effect->depth;
+    const uint8_t far* src_a = effect->angle;
     const uint16_t     dst_w = screen->dim_w;
     const uint16_t     dst_h = screen->dim_h;
     const uint16_t     dst_s = ((screen->dim_w + 1) & ~1);
@@ -654,16 +660,16 @@ void effect_render(Effect* effect, Screen* screen)
         for(dst_y = 0; dst_y < dst_h; ++dst_y) {
             uint8_t far* dst_o = dst_p;
             for(dst_x = 0; dst_x < dst_w; ++dst_x) {
-                const uint16_t tex_r = UINT16_T(*src_r++);
+                const uint16_t tex_d = UINT16_T(*src_d++);
                 const uint16_t tex_a = UINT16_T(*src_a++);
-                const uint16_t tex_x = off_x + (4096 / tex_r);
-                const uint16_t tex_y = off_y + tex_a;
-                const uint8_t  texel = src_p[(tex_y % src_h) * src_s + (tex_x % src_w)];
-                if(tex_r > 16) {
+                if(tex_d > 16) {
+                    const uint16_t tex_x = off_x + UINT16_T(16384) / UINT16_T(tex_d);
+                    const uint16_t tex_y = off_y + tex_a;
+                    const uint8_t  texel = src_p[(tex_y % src_h) * src_s + (tex_x % src_w)];
                     *dst_p++ = UINT16_T(texel);
                 }
                 else {
-                    *dst_p++ = 0;
+                    *dst_p++ = UINT16_T(0);
                 }
             }
             dst_p = dst_o + dst_s;
