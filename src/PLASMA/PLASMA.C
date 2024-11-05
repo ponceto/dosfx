@@ -133,6 +133,7 @@ void vga_wait_vbl(void)
  * ---------------------------------------------------------------------------
  */
 
+typedef struct _Color   Color;
 typedef struct _Screen  Screen;
 typedef struct _Effect  Effect;
 typedef struct _Buffer  Image1;
@@ -140,6 +141,13 @@ typedef struct _Buffer  Image2;
 typedef struct _Buffer  Image3;
 typedef struct _Globals Globals;
 typedef struct _Program Program;
+
+struct _Color
+{
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
 
 struct _Screen
 {
@@ -267,10 +275,11 @@ void screen_init(Screen* screen)
         uint16_t       index = 0;
         const uint16_t count = 256;
         for(index = 0; index < count; ++index) {
-            const uint8_t pal_r = index;
-            const uint8_t pal_g = index;
-            const uint8_t pal_b = index;
-            vga_set_color(index, pal_r, pal_g, pal_b);
+            Color color;
+            color.r = index;
+            color.g = index;
+            color.b = index;
+            vga_set_color(index, color.r, color.g, color.b);
         }
     }
     if(screen->pixels != NULL) {
