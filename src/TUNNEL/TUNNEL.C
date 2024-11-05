@@ -500,6 +500,16 @@ void screen_init(Screen* screen)
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
+        uint16_t       index = 0;
+        const uint16_t count = 256;
+        for(index = 0; index < count; ++index) {
+            const uint8_t pal_r = index;
+            const uint8_t pal_g = index;
+            const uint8_t pal_b = index;
+            vga_set_color(index, pal_r, pal_g, pal_b);
+        }
+    }
+    if(screen->pixels != NULL) {
         const uint16_t dst_w = screen->dim_w;
         const uint16_t dst_h = screen->dim_h;
         uint8_t far*   dst_p = screen->pixels;
@@ -509,16 +519,6 @@ void screen_init(Screen* screen)
             for(dst_x = 0; dst_x < dst_w; ++dst_x) {
                 *dst_p++ = UINT8_T(0);
             }
-        }
-    }
-    if(screen->pixels != NULL) {
-        uint16_t       index = 0;
-        const uint16_t count = 256;
-        for(index = 0; index < count; ++index) {
-            const uint8_t pal_r = index;
-            const uint8_t pal_g = index;
-            const uint8_t pal_b = index;
-            vga_set_color(index, pal_r, pal_g, pal_b);
         }
     }
 }
