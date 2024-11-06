@@ -6,6 +6,14 @@ Some effects written in Turbo-C 2.01 for MSDOS.
 
 Here is the list of the implemented effects.
 
+### FLAMES
+
+The flames effect is a popular visual technique from the 90s demoscene, simulating fire on the screen. This effect mimics the movement and intensity of flames, often with glowing colors that shift from bright yellow and orange at the base to darker reds and black at the top, capturing the dynamic and chaotic nature of fire. 
+
+![Flames](doc/flames.png)
+
+In the demoscene, the flames effect became iconic as a test of both a coder’s ability to manage complex pixel manipulation and their creativity in rendering lifelike visuals. This effect contributed to the dramatic, atmospheric style of many 90s demos, showcasing the technical prowess and artistic ingenuity of demoscene developers.
+
 ### PLASMA
 
 The plasma effect is an iconic visual effect from the 90s demoscene, especially popular in demos on the Amiga and MS-DOS. This effect consists of a colorful, fluid distortion, animated to create the impression of moving waves or merging bubbles undulating across the screen. It is based on real-time distortion calculations, where colors are interpolated to create a psychedelic and hypnotic gradient.
