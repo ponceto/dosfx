@@ -274,8 +274,8 @@ void screen_init(Screen* screen)
     if(screen->pixels != NULL) {
         uint16_t       index = 0;
         const uint16_t count = 256;
+        Color          color = { 0, 0, 0 };
         for(index = 0; index < count; ++index) {
-            Color color;
             color.r = index;
             color.g = index;
             color.b = index;

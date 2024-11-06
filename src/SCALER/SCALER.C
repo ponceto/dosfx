@@ -504,8 +504,8 @@ void screen_init(Screen* screen)
     if(screen->pixels != NULL) {
         uint16_t       index = 0;
         const uint16_t count = 256;
+        Color          color = { 0, 0, 0 };
         for(index = 0; index < count; ++index) {
-            Color color;
             color.r = index;
             color.g = index;
             color.b = index;
@@ -561,11 +561,12 @@ void effect_init(Effect* effect)
             uint16_t       index = 0;
             const uint16_t count = 256;
             uint8_t far*   value = reader.footer.palette;
+            Color          color = { 0, 0, 0 };
             for(index = 0; index < count; ++index) {
-                const uint8_t pal_r = *value++;
-                const uint8_t pal_g = *value++;
-                const uint8_t pal_b = *value++;
-                vga_set_color(index, pal_r, pal_g, pal_b);
+                color.r = *value++;
+                color.g = *value++;
+                color.b = *value++;
+                vga_set_color(index, color.r, color.g, color.b);
             }
         }
         pcx_reader_fini(&reader);

@@ -510,8 +510,8 @@ void screen_init(Screen* screen)
     if(screen->pixels != NULL) {
         uint16_t       index = 0;
         const uint16_t count = 256;
+        Color          color = { 0, 0, 0 };
         for(index = 0; index < count; ++index) {
-            Color color;
             color.r = index;
             color.g = index;
             color.b = index;
@@ -567,11 +567,12 @@ void effect_init(Effect* effect)
             uint16_t       index = 0;
             const uint16_t count = 256;
             uint8_t far*   value = reader.footer.palette;
+            Color          color = { 0, 0, 0 };
             for(index = 0; index < count; ++index) {
-                const uint8_t pal_r = *value++;
-                const uint8_t pal_g = *value++;
-                const uint8_t pal_b = *value++;
-                vga_set_color(index, pal_r, pal_g, pal_b);
+                color.r = *value++;
+                color.g = *value++;
+                color.b = *value++;
+                vga_set_color(index, color.r, color.g, color.b);
             }
         }
         pcx_reader_fini(&reader);
@@ -659,16 +660,16 @@ void effect_render(Effect* effect, Screen* screen)
     const uint16_t     dst_h = screen->dim_h;
     const uint16_t     dst_s = ((screen->dim_w + 1) & ~1);
     uint8_t far*       dst_p = screen->pixels;
-    uint16_t           dst_x = 0;
-    uint16_t           dst_y = 0;
+    uint16_t           cnt_x = 0;
+    uint16_t           cnt_y = 0;
 
     /* wait for vbl */ {
         vga_wait_vbl();
     }
     /* render the effect */ {
-        for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+        for(cnt_y = dst_h; cnt_y != 0; --cnt_y) {
             uint8_t far* dst_o = dst_p;
-            for(dst_x = 0; dst_x < dst_w; ++dst_x) {
+            for(cnt_x = dst_w; cnt_x != 0; --cnt_x) {
                 const uint16_t tex_d = UINT16_T(*src_d++);
                 const uint16_t tex_a = UINT16_T(*src_a++);
                 if(tex_d > 16) {
