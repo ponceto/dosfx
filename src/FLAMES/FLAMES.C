@@ -196,7 +196,7 @@ Program g_program = {
     },
     /* effect */ {
         160,  /* dim_w  */
-        100,  /* dim_h  */
+        104,  /* dim_h  */
         0,    /* random */
         NULL  /* pixels */
     },
@@ -336,37 +336,41 @@ void effect_update(Effect* effect)
     uint16_t       cnt_y = 0;
 
     /* render the effect */ {
-        for(cnt_y = (dst_h - 1); cnt_y != 0; --cnt_y) {
+        for(cnt_y = (dst_h - 2); cnt_y != 0; --cnt_y) {
             uint8_t far* dst_o = dst_p;
             /* left column*/ {
                 const uint16_t v1 = dst_p[dst_s];
                 const uint16_t v2 = dst_p[dst_s + 1];
                 const uint16_t v3 = dst_p[dst_s + 1];
                 const uint16_t v4 = dst_p[dst_s * 2];
-                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 31) >> 7);
+                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 30) >> 7);
             }
             for(cnt_x = (dst_w - 2); cnt_x != 0; --cnt_x) {
                 const uint16_t v1 = dst_p[dst_s];
                 const uint16_t v2 = dst_p[dst_s - 1];
                 const uint16_t v3 = dst_p[dst_s + 1];
                 const uint16_t v4 = dst_p[dst_s * 2];
-                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 31) >> 7);
+                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 30) >> 7);
             }
             /* right column*/ {
                 const uint16_t v1 = dst_p[dst_s];
                 const uint16_t v2 = dst_p[dst_s - 1];
                 const uint16_t v3 = dst_p[dst_s - 1];
                 const uint16_t v4 = dst_p[dst_s * 2];
-                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 31) >> 7);
+                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 30) >> 7);
             }
             dst_p = dst_o + dst_s;
         }
     }
-    /* render the last line */ {
+    /* render the two last lines */ {
         uint16_t random = effect->random;
-        for(cnt_x = dst_w; cnt_x != 0; --cnt_x) {
-            random = ((random * 137) + 187);
-            *dst_p++ = 128 + (UINT8_T(random >> 9) & 0x7f);
+        for(cnt_y = 2; cnt_y != 0; --cnt_y) {
+            uint8_t far* dst_o = dst_p;
+            for(cnt_x = dst_w; cnt_x != 0; --cnt_x) {
+                random = ((random * 137) + 187);
+                *dst_p++ = 128 + (UINT8_T(random >> 9) & 0x7f);
+            }
+            dst_p = dst_o + dst_s;
         }
         effect->random = random;
     }
@@ -375,27 +379,37 @@ void effect_update(Effect* effect)
 void effect_render(Effect* effect, Screen* screen)
 {
     const uint16_t     src_w = effect->dim_w;
-    const uint16_t     src_h = effect->dim_h;
+    const uint16_t     src_h = effect->dim_h - 4;
+    const uint16_t     src_s = ((src_w + 1) & ~1);
     const uint8_t far* src_p = effect->pixels;
+    const uint16_t     dst_w = screen->dim_w;
+    const uint16_t     dst_h = screen->dim_h;
+    const uint16_t     dst_s = ((dst_w + 1) & ~1);
     uint8_t far*       dst_p = screen->pixels;
     uint16_t           cnt_x = 0;
     uint16_t           cnt_y = 0;
+    uint16_t           err_x = 0;
+    uint16_t           err_y = 0;
 
     /* wait for vbl */ {
         vga_wait_vbl();
     }
-    /* blit the effect */ {
-        for(cnt_y = src_h; cnt_y != 0; --cnt_y) {
+    /* render the effect */ {
+        for(cnt_y = dst_h; cnt_y != 0; --cnt_y) {
+            uint8_t far*       dst_o = dst_p;
             const uint8_t far* src_o = src_p;
-            for(cnt_x = src_w, src_p = src_o; cnt_x != 0; --cnt_x) {
-                const uint8_t pixel = *src_p++;
-                *dst_p++ = pixel;
-                *dst_p++ = pixel;
+            for(cnt_x = dst_w; cnt_x != 0; --cnt_x) {
+                *dst_p++ = *src_p;
+                if((err_x += src_w) >= dst_w) {
+                    err_x -= dst_w;
+                    src_p += 1;
+                }
             }
-            for(cnt_x = src_w, src_p = src_o; cnt_x != 0; --cnt_x) {
-                const uint8_t pixel = *src_p++;
-                *dst_p++ = pixel;
-                *dst_p++ = pixel;
+            dst_p = dst_o + dst_s;
+            src_p = src_o;
+            if((err_y += src_h) >= dst_h) {
+                err_y -= dst_h;
+                src_p += src_s;
             }
         }
     }
