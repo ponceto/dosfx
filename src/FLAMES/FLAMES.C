@@ -228,25 +228,39 @@ double hue2rgb(double p, double q, double t)
     return p;
 }
 
-void hsl2rgb(Color* color, double h, double s, double l)
+void color_init_rgb(Color* color, double r, double g, double b)
+{
+    if(r <= 0.0) { r = 0.0; }
+    if(r >= 1.0) { r = 1.0; }
+    if(g <= 0.0) { g = 0.0; }
+    if(g >= 1.0) { g = 1.0; }
+    if(b <= 0.0) { b = 0.0; }
+    if(b >= 1.0) { b = 1.0; }
+
+    color->r = UINT8_T(255.0 * r);
+    color->g = UINT8_T(255.0 * g);
+    color->b = UINT8_T(255.0 * b);
+}
+
+void color_init_hsl(Color* color, double h, double s, double l)
 {
     if(h <= 0.0) { h = 0.0; }
-    if(s <= 0.0) { s = 0.0; }
-    if(l <= 0.0) { l = 0.0; }
     if(h >= 1.0) { h = 1.0; }
+    if(s <= 0.0) { s = 0.0; }
     if(s >= 1.0) { s = 1.0; }
+    if(l <= 0.0) { l = 0.0; }
     if(l >= 1.0) { l = 1.0; }
+
     if(s == 0.0) {
-        color->r = UINT8_T(255.0 * l);
-        color->g = UINT8_T(255.0 * l);
-        color->b = UINT8_T(255.0 * l);
+        color_init_rgb(color, l, l, l);
     }
     else {
-        double q = (l < 0.5 ? (l * (1.0 + s)) : (l + s - l * s));
-        double p = ((2.0 * l) - q);
-        color->r = UINT8_T(255.0 * hue2rgb(p, q, h + (1.0 / 3.0)));
-        color->g = UINT8_T(255.0 * hue2rgb(p, q, h));
-        color->b = UINT8_T(255.0 * hue2rgb(p, q, h - (1.0 / 3.0)));
+        const double q = (l < 0.5 ? (l * (1.0 + s)) : (l + s - l * s));
+        const double p = ((2.0 * l) - q);
+        const double r = hue2rgb(p, q, h + (1.0 / 3.0));
+        const double g = hue2rgb(p, q, h);
+        const double b = hue2rgb(p, q, h - (1.0 / 3.0));
+        color_init_rgb(color, r, g, b);
     }
 }
 
@@ -273,7 +287,7 @@ void screen_init(Screen* screen)
             const double h = DOUBLE(index) / 255.0 / 6.0;
             const double s = DOUBLE(1.0);
             const double l = DOUBLE(index) / 255.0 * 1.1;
-            hsl2rgb(&color, h, s, l);
+            color_init_hsl(&color, h, s, l);
             vga_set_color(index, color.r, color.g, color.b);
         }
     }
