@@ -475,8 +475,8 @@ Program g_program = {
     /* screen */ {
         0,    /* v_mode */
         0,    /* p_mode */
-        0,    /* dim_w  */
-        0,    /* dim_h  */
+        320,  /* dim_w  */
+        200,  /* dim_h  */
         NULL  /* pixels */
     },
     /* effect */ {
@@ -503,8 +503,6 @@ void screen_init(Screen* screen)
     if(screen->pixels == NULL) {
         screen->v_mode = 0x13;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->dim_w  = 320;
-        screen->dim_h  = 200;
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
@@ -537,8 +535,6 @@ void screen_fini(Screen* screen)
     if(screen->pixels != NULL) {
         screen->v_mode = screen->p_mode;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->dim_w  = 0;
-        screen->dim_h  = 0;
         screen->pixels = NULL;
     }
 }

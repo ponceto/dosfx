@@ -188,17 +188,17 @@ Globals g_globals = {
 
 Program g_program = {
     /* screen */ {
-        0,   /* v_mode */
-        0,   /* p_mode */
-        0,   /* dim_w  */
-        0,   /* dim_h  */
-        NULL /* pixels */
+        0,    /* v_mode */
+        0,    /* p_mode */
+        320,  /* dim_w  */
+        200,  /* dim_h  */
+        NULL  /* pixels */
     },
     /* effect */ {
-        320, /* dim_w  */
-        200, /* dim_h  */
-        0,   /* random */
-        NULL /* pixels */
+        160,  /* dim_w  */
+        100,  /* dim_h  */
+        0,    /* random */
+        NULL  /* pixels */
     },
 };
 
@@ -269,8 +269,6 @@ void screen_init(Screen* screen)
     if(screen->pixels == NULL) {
         screen->v_mode = 0x13;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->dim_w  = 320;
-        screen->dim_h  = 200;
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
@@ -304,8 +302,6 @@ void screen_fini(Screen* screen)
     if(screen->pixels != NULL) {
         screen->v_mode = screen->p_mode;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->dim_w  = 0;
-        screen->dim_h  = 0;
         screen->pixels = NULL;
     }
 }
@@ -332,21 +328,13 @@ void effect_fini(Effect* effect)
 
 void effect_update(Effect* effect)
 {
-    IGNORE(effect);
-}
-
-void effect_render(Effect* effect, Screen* screen)
-{
-    const uint16_t dst_w = screen->dim_w;
-    const uint16_t dst_h = screen->dim_h;
-    const uint16_t dst_s = ((screen->dim_w + 1) & ~1);
-    uint8_t far*   dst_p = screen->pixels;
+    const uint16_t dst_w = effect->dim_w;
+    const uint16_t dst_h = effect->dim_h;
+    const uint16_t dst_s = ((effect->dim_w + 1) & ~1);
+    uint8_t far*   dst_p = effect->pixels;
     uint16_t       cnt_x = 0;
     uint16_t       cnt_y = 0;
 
-    /* wait for vbl */ {
-        vga_wait_vbl();
-    }
     /* render the effect */ {
         for(cnt_y = (dst_h - 1); cnt_y != 0; --cnt_y) {
             uint8_t far* dst_o = dst_p;
@@ -381,6 +369,35 @@ void effect_render(Effect* effect, Screen* screen)
             *dst_p++ = 128 + (UINT8_T(random >> 9) & 0x7f);
         }
         effect->random = random;
+    }
+}
+
+void effect_render(Effect* effect, Screen* screen)
+{
+    const uint16_t     src_w = effect->dim_w;
+    const uint16_t     src_h = effect->dim_h;
+    const uint8_t far* src_p = effect->pixels;
+    uint8_t far*       dst_p = screen->pixels;
+    uint16_t           cnt_x = 0;
+    uint16_t           cnt_y = 0;
+
+    /* wait for vbl */ {
+        vga_wait_vbl();
+    }
+    /* blit the effect */ {
+        for(cnt_y = src_h; cnt_y != 0; --cnt_y) {
+            const uint8_t far* src_o = src_p;
+            for(cnt_x = src_w, src_p = src_o; cnt_x != 0; --cnt_x) {
+                const uint8_t pixel = *src_p++;
+                *dst_p++ = pixel;
+                *dst_p++ = pixel;
+            }
+            for(cnt_x = src_w, src_p = src_o; cnt_x != 0; --cnt_x) {
+                const uint8_t pixel = *src_p++;
+                *dst_p++ = pixel;
+                *dst_p++ = pixel;
+            }
+        }
     }
 }
 

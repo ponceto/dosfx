@@ -210,49 +210,49 @@ Globals g_globals = {
 
 Program g_program = {
     /* screen */ {
-        0,   /* v_mode */
-        0,   /* p_mode */
-        0,   /* dim_w  */
-        0,   /* dim_h  */
-        NULL /* pixels */
+        0,    /* v_mode */
+        0,    /* p_mode */
+        320,  /* dim_w  */
+        200,  /* dim_h  */
+        NULL  /* pixels */
     },
     /* effect */ {
-        160, /* dim_w  */
-        100, /* dim_h  */
-        0,   /* pal_r  */
-        0,   /* pal_g  */
-        0,   /* pal_b  */
-        101, /* inc_r  */
-        127, /* inc_g  */
-        257, /* inc_b  */
-        NULL /* pixels */
+        160,  /* dim_w  */
+        100,  /* dim_h  */
+        0,    /* pal_r  */
+        0,    /* pal_g  */
+        0,    /* pal_b  */
+        101,  /* inc_r  */
+        127,  /* inc_g  */
+        257,  /* inc_b  */
+        NULL  /* pixels */
     },
     /* image1 */ {
-        320, /* dim_w  */
-        200, /* dim_h  */
-        0,   /* pos_x  */
-        0,   /* pos_y  */
-        0,   /* angle  */
-        -5,  /* speed  */
-        NULL /* pixels */
+        320,  /* dim_w  */
+        200,  /* dim_h  */
+        0,    /* pos_x  */
+        0,    /* pos_y  */
+        0,    /* angle  */
+        -5,   /* speed  */
+        NULL  /* pixels */
     },
     /* image2 */ {
-        320, /* dim_w  */
-        200, /* dim_h  */
-        0,   /* pos_x  */
-        0,   /* pos_y  */
-        0,   /* angle  */
-        +2,  /* speed  */
-        NULL /* pixels */
+        320,  /* dim_w  */
+        200,  /* dim_h  */
+        0,    /* pos_x  */
+        0,    /* pos_y  */
+        0,    /* angle  */
+        +2,   /* speed  */
+        NULL  /* pixels */
     },
     /* image3 */ {
-        320, /* dim_w  */
-        200, /* dim_h  */
-        0,   /* pos_x  */
-        0,   /* pos_y  */
-        0,   /* angle  */
-        +3,  /* speed  */
-        NULL /* pixels */
+        320,  /* dim_w  */
+        200,  /* dim_h  */
+        0,    /* pos_x  */
+        0,    /* pos_y  */
+        0,    /* angle  */
+        +3,   /* speed  */
+        NULL  /* pixels */
     },
 };
 
@@ -267,8 +267,6 @@ void screen_init(Screen* screen)
     if(screen->pixels == NULL) {
         screen->v_mode = 0x13;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->dim_w  = 320;
-        screen->dim_h  = 200;
         screen->pixels = MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
@@ -301,8 +299,6 @@ void screen_fini(Screen* screen)
     if(screen->pixels != NULL) {
         screen->v_mode = screen->p_mode;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->dim_w  = 0;
-        screen->dim_h  = 0;
         screen->pixels = NULL;
     }
 }
@@ -383,7 +379,7 @@ void effect_render(Effect* effect, Screen* screen)
             pal_b += inc_b;
         }
     }
-    /* render the effect */ {
+    /* blit the effect */ {
         const uint16_t     src_w = effect->dim_w;
         const uint16_t     src_h = effect->dim_h;
         const uint8_t far* src_p = effect->pixels;
