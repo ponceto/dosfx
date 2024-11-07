@@ -230,12 +230,9 @@ double hue2rgb(double p, double q, double t)
 
 void color_init_rgb(Color* color, double r, double g, double b)
 {
-    if(r <= 0.0) { r = 0.0; }
-    if(r >= 1.0) { r = 1.0; }
-    if(g <= 0.0) { g = 0.0; }
-    if(g >= 1.0) { g = 1.0; }
-    if(b <= 0.0) { b = 0.0; }
-    if(b >= 1.0) { b = 1.0; }
+    if(r <= 0.0) r = 0.0; else if(r >= 1.0) r = 1.0;
+    if(g <= 0.0) g = 0.0; else if(g >= 1.0) g = 1.0;
+    if(b <= 0.0) b = 0.0; else if(b >= 1.0) b = 1.0;
 
     color->r = UINT8_T(255.0 * r);
     color->g = UINT8_T(255.0 * g);
@@ -244,12 +241,9 @@ void color_init_rgb(Color* color, double r, double g, double b)
 
 void color_init_hsl(Color* color, double h, double s, double l)
 {
-    if(h <= 0.0) { h = 0.0; }
-    if(h >= 1.0) { h = 1.0; }
-    if(s <= 0.0) { s = 0.0; }
-    if(s >= 1.0) { s = 1.0; }
-    if(l <= 0.0) { l = 0.0; }
-    if(l >= 1.0) { l = 1.0; }
+    if(h <= 0.0) h = 0.0; else if(h >= 1.0) h = 1.0;
+    if(s <= 0.0) s = 0.0; else if(s >= 1.0) s = 1.0;
+    if(l <= 0.0) l = 0.0; else if(l >= 1.0) l = 1.0;
 
     if(s == 0.0) {
         color_init_rgb(color, l, l, l);
