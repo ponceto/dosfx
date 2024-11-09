@@ -85,6 +85,25 @@ uint8_t far* free_buffer(uint8_t far* buffer)
 
 /*
  * ---------------------------------------------------------------------------
+ * low level bios functions
+ * ---------------------------------------------------------------------------
+ */
+
+const volatile uint32_t* BIOS_TICKS = (const volatile uint32_t*) MK_FP(0x0040, 0x006C);
+
+uint32_t get_bios_ticks(void)
+{
+    uint32_t ticks = 0;
+
+    disable();
+    ticks = *BIOS_TICKS;
+    enable();
+
+    return ticks;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * low level vga functions
  * ---------------------------------------------------------------------------
  */
@@ -120,11 +139,27 @@ void vga_set_color(uint8_t color, uint8_t r, uint8_t g, uint8_t b)
 
 void vga_wait_vbl(void)
 {
-    uint8_t status;
+    uint8_t status = 0;
+    /* wait vbl */ {
+        do {
+            status = inportb(0x3da);
+        } while((status & 0x08) == 0x00);
+    }
+}
 
-    do {
-        status = inportb(0x3da);
-    } while((status & 8) == 0x00);
+void vga_wait_next_vbl(void)
+{
+    uint8_t status = 0;
+    /* already in vbl */ {
+        do {
+            status = inportb(0x3da);
+        } while((status & 0x08) != 0x00);
+    }
+    /* wait next vbl */ {
+        do {
+            status = inportb(0x3da);
+        } while((status & 0x08) == 0x00);
+    }
 }
 
 /*
@@ -587,7 +622,7 @@ void effect_update(Effect* effect)
 void effect_render(Effect* effect, Screen* screen)
 {
     /* wait for vbl */ {
-        vga_wait_vbl();
+        vga_wait_next_vbl();
     }
     /* render the effect */ {
         const uint16_t     img_w = effect->dim_w;
