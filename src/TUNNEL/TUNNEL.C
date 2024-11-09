@@ -89,17 +89,17 @@ uint8_t far* free_buffer(uint8_t far* buffer)
  * ---------------------------------------------------------------------------
  */
 
-const volatile uint32_t* BIOS_TICKS = (const volatile uint32_t*) MK_FP(0x0040, 0x006C);
-
 uint32_t get_bios_ticks(void)
 {
-    uint32_t ticks = 0;
+    static const volatile uint32_t* BIOS_TICKS = (const volatile uint32_t*) MK_FP(0x0040, 0x006C);
+    uint32_t                        bios_ticks = 0;
 
-    disable();
-    ticks = *BIOS_TICKS;
-    enable();
-
-    return ticks;
+    /* critical section */ {
+        disable();
+        bios_ticks = *BIOS_TICKS;
+        enable();
+    }
+    return bios_ticks;
 }
 
 /*
