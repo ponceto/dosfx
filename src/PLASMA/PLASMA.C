@@ -108,6 +108,11 @@ uint32_t get_bios_ticks(void)
  * ---------------------------------------------------------------------------
  */
 
+#define VGA_WR_DAC_INDEX 0x3c8
+#define VGA_WR_DAC_VALUE 0x3c9
+#define VGA_RD_SR0_VALUE 0x3c2
+#define VGA_RD_SR1_VALUE 0x3da
+
 uint8_t vga_set_mode(uint8_t mode)
 {
     uint8_t prev = 0x00;
@@ -131,18 +136,19 @@ uint8_t vga_set_mode(uint8_t mode)
 
 void vga_set_color(uint8_t color, uint8_t r, uint8_t g, uint8_t b)
 {
-    outportb(0x3c8, color);
-    outportb(0x3c9, (r >> 2));
-    outportb(0x3c9, (g >> 2));
-    outportb(0x3c9, (b >> 2));
+    outportb(VGA_WR_DAC_INDEX, color);
+    outportb(VGA_WR_DAC_VALUE, (r >> 2));
+    outportb(VGA_WR_DAC_VALUE, (g >> 2));
+    outportb(VGA_WR_DAC_VALUE, (b >> 2));
 }
 
 void vga_wait_vbl(void)
 {
     uint8_t status = 0;
+
     /* wait vbl */ {
         do {
-            status = inportb(0x3da);
+            status = inportb(VGA_RD_SR1_VALUE);
         } while((status & 0x08) == 0x00);
     }
 }
@@ -150,14 +156,15 @@ void vga_wait_vbl(void)
 void vga_wait_next_vbl(void)
 {
     uint8_t status = 0;
+
     /* already in vbl */ {
         do {
-            status = inportb(0x3da);
+            status = inportb(VGA_RD_SR1_VALUE);
         } while((status & 0x08) != 0x00);
     }
     /* wait next vbl */ {
         do {
-            status = inportb(0x3da);
+            status = inportb(VGA_RD_SR1_VALUE);
         } while((status & 0x08) == 0x00);
     }
 }
