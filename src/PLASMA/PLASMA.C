@@ -374,7 +374,7 @@ void effect_update(Effect* effect, Program* program)
     const uint8_t far* img_2 = &program->image2.pixels[(program->image2.pos_y * dim_2) + program->image2.pos_x];
     const uint8_t far* img_3 = &program->image3.pixels[(program->image3.pos_y * dim_3) + program->image3.pos_x];
 
-    /* render the effect */ {
+    /* update the effect */ {
         const uint16_t dst_w = effect->dim_w;
         const uint16_t dst_h = effect->dim_h;
         uint16_t       dst_x = 0;
@@ -399,6 +399,17 @@ void effect_update(Effect* effect, Program* program)
 
 void effect_render(Effect* effect, Screen* screen)
 {
+    const uint16_t     src_w = effect->dim_w;
+    const uint16_t     src_h = effect->dim_h;
+    const uint16_t     src_s = ((src_w + 1) & ~1);
+    const uint8_t far* src_p = effect->pixels;
+    const uint16_t     dst_w = screen->dim_w;
+    const uint16_t     dst_h = screen->dim_h;
+    const uint16_t     dst_s = ((dst_w + 1) & ~1);
+    uint8_t far*       dst_p = screen->pixels;
+    uint16_t           cnt_x = 0;
+    uint16_t           cnt_y = 0;
+
     /* wait for vbl */ {
         vga_wait_next_vbl();
     }
@@ -422,24 +433,16 @@ void effect_render(Effect* effect, Screen* screen)
         }
     }
     /* blit the effect */ {
-        const uint16_t     src_w = effect->dim_w;
-        const uint16_t     src_h = effect->dim_h;
-        const uint8_t far* src_p = effect->pixels;
-        uint8_t far*       dst_p = screen->pixels;
-        uint16_t           cnt_x = 0;
-        uint16_t           cnt_y = 0;
         for(cnt_y = src_h; cnt_y != 0; --cnt_y) {
+            uint8_t far*       dst_o = dst_p;
             const uint8_t far* src_o = src_p;
             for(cnt_x = src_w, src_p = src_o; cnt_x != 0; --cnt_x) {
                 const uint8_t pixel = *src_p++;
-                *dst_p++ = pixel;
-                *dst_p++ = pixel;
+                *dst_p++ = dst_p[dst_s] = pixel;
+                *dst_p++ = dst_p[dst_s] = pixel;
             }
-            for(cnt_x = src_w, src_p = src_o; cnt_x != 0; --cnt_x) {
-                const uint8_t pixel = *src_p++;
-                *dst_p++ = pixel;
-                *dst_p++ = pixel;
-            }
+            dst_p = dst_o + (dst_s << 1);
+            src_p = src_o + (src_s << 0);
         }
     }
 }

@@ -391,7 +391,7 @@ void effect_update(Effect* effect)
     uint16_t       cnt_x = 0;
     uint16_t       cnt_y = 0;
 
-    /* render the effect */ {
+    /* update the effect */ {
         const uint16_t offset1 = (dst_s + 0);
         const uint16_t offset2 = (dst_s + 1);
         const uint16_t offset3 = (dst_s - 1);
@@ -422,7 +422,7 @@ void effect_update(Effect* effect)
             dst_p = dst_o + dst_s;
         }
     }
-    /* render the two last lines */ {
+    /* update the two last lines */ {
         uint16_t random = effect->random;
         for(cnt_y = 2; cnt_y != 0; --cnt_y) {
             uint8_t far* dst_o = dst_p;
