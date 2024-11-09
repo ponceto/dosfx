@@ -208,6 +208,17 @@ Program g_program = {
  * ---------------------------------------------------------------------------
  */
 
+double clamp(double val, double min, double max)
+{
+    if(val <= min) {
+        return min;
+    }
+    if(val >= max) {
+        return max;
+    }
+    return val;
+}
+
 double hue2rgb(double p, double q, double t)
 {
     if(t < 0.0) {
@@ -230,20 +241,16 @@ double hue2rgb(double p, double q, double t)
 
 void color_init_rgb(Color* color, double r, double g, double b)
 {
-    if(r <= 0.0) r = 0.0; else if(r >= 1.0) r = 1.0;
-    if(g <= 0.0) g = 0.0; else if(g >= 1.0) g = 1.0;
-    if(b <= 0.0) b = 0.0; else if(b >= 1.0) b = 1.0;
-
-    color->r = UINT8_T(255.0 * r);
-    color->g = UINT8_T(255.0 * g);
-    color->b = UINT8_T(255.0 * b);
+    color->r = UINT8_T(255.0 * clamp(r, 0.0, 1.0));
+    color->g = UINT8_T(255.0 * clamp(g, 0.0, 1.0));
+    color->b = UINT8_T(255.0 * clamp(b, 0.0, 1.0));
 }
 
 void color_init_hsl(Color* color, double h, double s, double l)
 {
-    if(h <= 0.0) h = 0.0; else if(h >= 1.0) h = 1.0;
-    if(s <= 0.0) s = 0.0; else if(s >= 1.0) s = 1.0;
-    if(l <= 0.0) l = 0.0; else if(l >= 1.0) l = 1.0;
+    h = clamp(h, 0.0, 1.0);
+    s = clamp(s, 0.0, 1.0);
+    l = clamp(l, 0.0, 1.0);
 
     if(s == 0.0) {
         color_init_rgb(color, l, l, l);
@@ -274,11 +281,18 @@ void screen_init(Screen* screen)
     if(screen->pixels != NULL) {
         uint16_t       index = 0;
         const uint16_t count = 256;
+        const double   min_h = 0.0;
+        const double   max_h = 1.0 / 6.0;
+        const double   min_s = 0.5;
+        const double   max_s = 1.0;
+        const double   min_l = 0.0;
+        const double   max_l = 1.0;
         Color          color = { 0, 0, 0 };
         for(index = 0; index < count; ++index) {
-            const double h = DOUBLE(index) / 255.0 / 6.0;
-            const double s = DOUBLE(1.0);
-            const double l = DOUBLE(index) / 255.0 * 1.1;
+            const double v = DOUBLE(index) / 255.0;
+            const double h = clamp((1.3 * (v / 6.0)), min_h, max_h);
+            const double s = clamp((4.0 * (v / 1.0)), min_s, max_s);
+            const double l = clamp((1.2 * (v / 1.0)), min_l, max_l);
             color_init_hsl(&color, h, s, l);
             vga_set_color(index, color.r, color.g, color.b);
         }
@@ -336,28 +350,32 @@ void effect_update(Effect* effect)
     uint16_t       cnt_y = 0;
 
     /* render the effect */ {
+        const uint16_t offset1 = (dst_s + 0);
+        const uint16_t offset2 = (dst_s + 1);
+        const uint16_t offset3 = (dst_s - 1);
+        const uint16_t offset4 = (dst_s * 2);
         for(cnt_y = (dst_h - 2); cnt_y != 0; --cnt_y) {
             uint8_t far* dst_o = dst_p;
             /* left column*/ {
-                const uint16_t v1 = dst_p[dst_s];
-                const uint16_t v2 = dst_p[dst_s + 1];
-                const uint16_t v3 = dst_p[dst_s + 1];
-                const uint16_t v4 = dst_p[dst_s * 2];
-                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 30) >> 7);
+                const uint16_t v1 = dst_p[offset1];
+                const uint16_t v2 = dst_p[offset2];
+                const uint16_t v3 = dst_p[offset2];
+                const uint16_t v4 = dst_p[offset4];
+                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 61) >> 8);
             }
             for(cnt_x = (dst_w - 2); cnt_x != 0; --cnt_x) {
-                const uint16_t v1 = dst_p[dst_s];
-                const uint16_t v2 = dst_p[dst_s - 1];
-                const uint16_t v3 = dst_p[dst_s + 1];
-                const uint16_t v4 = dst_p[dst_s * 2];
-                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 30) >> 7);
+                const uint16_t v1 = dst_p[offset1];
+                const uint16_t v2 = dst_p[offset2];
+                const uint16_t v3 = dst_p[offset3];
+                const uint16_t v4 = dst_p[offset4];
+                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 61) >> 8);
             }
             /* right column*/ {
-                const uint16_t v1 = dst_p[dst_s];
-                const uint16_t v2 = dst_p[dst_s - 1];
-                const uint16_t v3 = dst_p[dst_s - 1];
-                const uint16_t v4 = dst_p[dst_s * 2];
-                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 30) >> 7);
+                const uint16_t v1 = dst_p[offset1];
+                const uint16_t v2 = dst_p[offset3];
+                const uint16_t v3 = dst_p[offset3];
+                const uint16_t v4 = dst_p[offset4];
+                *dst_p++ = UINT8_T(((v1 + v2 + v3 + v4) * 61) >> 8);
             }
             dst_p = dst_o + dst_s;
         }
@@ -368,7 +386,7 @@ void effect_update(Effect* effect)
             uint8_t far* dst_o = dst_p;
             for(cnt_x = dst_w; cnt_x != 0; --cnt_x) {
                 random = ((random * 137) + 187);
-                *dst_p++ = 128 + (UINT8_T(random >> 9) & 0x7f);
+                *dst_p++ = (128 + (UINT8_T(random >> 9) & 0x7f));
             }
             dst_p = dst_o + dst_s;
         }
@@ -378,7 +396,7 @@ void effect_update(Effect* effect)
 
 void effect_render(Effect* effect, Screen* screen)
 {
-    const uint16_t     src_w = effect->dim_w;
+    const uint16_t     src_w = effect->dim_w - 0;
     const uint16_t     src_h = effect->dim_h - 4;
     const uint16_t     src_s = ((src_w + 1) & ~1);
     const uint8_t far* src_p = effect->pixels;
@@ -394,7 +412,7 @@ void effect_render(Effect* effect, Screen* screen)
     /* wait for vbl */ {
         vga_wait_vbl();
     }
-    /* render the effect */ {
+    /* blit and scale the effect */ {
         for(cnt_y = dst_h; cnt_y != 0; --cnt_y) {
             uint8_t far*       dst_o = dst_p;
             const uint8_t far* src_o = src_p;
