@@ -22,13 +22,24 @@
 
 /*
  * ---------------------------------------------------------------------------
- * some useful macros
+ * some useful types
  * ---------------------------------------------------------------------------
  */
 
-#ifndef countof
-#define countof(array) (sizeof(array) / sizeof(array[0]))
-#endif
+typedef signed char    int8_t;
+typedef signed short   int16_t;
+typedef signed long    int32_t;
+typedef unsigned char  uint8_t;
+typedef unsigned short uint16_t;
+typedef unsigned long  uint32_t;
+
+typedef void interrupt (*isr_t)(void);
+
+/*
+ * ---------------------------------------------------------------------------
+ * some useful macros
+ * ---------------------------------------------------------------------------
+ */
 
 #define IGNORE(expression)   ((void)(expression))
 #define DOUBLE(expression)   ((double)(expression))
@@ -42,68 +53,23 @@
 
 /*
  * ---------------------------------------------------------------------------
- * some useful types
- * ---------------------------------------------------------------------------
- */
-
-typedef signed char    int8_t;
-typedef signed short   int16_t;
-typedef signed long    int32_t;
-typedef unsigned char  uint8_t;
-typedef unsigned short uint16_t;
-typedef unsigned long  uint32_t;
-
-/*
- * ---------------------------------------------------------------------------
- * some useful utilities
- * ---------------------------------------------------------------------------
- */
-
-uint8_t far* alloc_buffer(size_t row, size_t col)
-{
-    const size_t   bytes = (SIZE_T(row)   *   SIZE_T(col));
-    const uint32_t total = (UINT32_T(row) * UINT32_T(col));
-
-    if((bytes == total) && (bytes != 0)) {
-        uint8_t far* buffer = (uint8_t far*) malloc(bytes);
-        if(buffer != NULL) {
-            (void) memset(buffer, 0, bytes);
-            return buffer;
-        }
-    }
-    return NULL;
-}
-
-uint8_t far* free_buffer(uint8_t far* buffer)
-{
-    if(buffer != NULL) {
-        free(buffer);
-        buffer = NULL;
-    }
-    return buffer;
-}
-
-/*
- * ---------------------------------------------------------------------------
  * low level pit functions
  * ---------------------------------------------------------------------------
  */
 
-#define PIT_CHANNEL0_INT 0x08
-#define PIT_CHANNEL0_REG 0x40
-#define PIT_CHANNEL1_REG 0x41
-#define PIT_CHANNEL2_REG 0x42
-#define PIT_CMD_WORD_REG 0x43
-#define PIC_CMD_WORD_REG 0x20
+#define PIT_TIMER0_REG  0x40
+#define PIT_TIMER1_REG  0x41
+#define PIT_TIMER2_REG  0x42
+#define PIT_CONTROL_REG 0x43
+#define PIC_CONTROL_REG 0x20
 
-struct Timer0
-{
+struct Timer0 {
+    uint16_t freq;
     uint16_t period;
     uint16_t counter;
-    void interrupt (*old_isr)(void);
-};
-
-struct Timer0 timer0 = {
+    isr_t    old_isr;
+} timer0 = {
+    35,   /* freq    */
     0,    /* period  */
     0,    /* counter */
     NULL  /* old_isr */
@@ -115,54 +81,64 @@ void interrupt timer0_isr(void)
         ++timer0.counter;
     }
     /* acknowledge interrupt */ {
-        outportb(PIC_CMD_WORD_REG, 0x20);
+        outportb(PIC_CONTROL_REG, 0x20);
     }
 }
 
-void timer0_init()
+void timer0_init(void)
 {
-    const uint32_t master_clock = 14318180UL;
-    const uint32_t divide_clock = 12UL;
-    const uint32_t frequency    = 35UL;
-    const uint32_t period       = (master_clock / (divide_clock * frequency));
+    const uint32_t clock     = 14318180UL;
+    const uint32_t scale     = 12UL;
+    const uint32_t frequency = timer0.freq;
+    const uint32_t period    = (clock / (scale * frequency));
 
     if(timer0.old_isr == NULL) {
-        disable();
-        /* get old handler */ {
-            timer0.old_isr = getvect(PIT_CHANNEL0_INT);
+        const uint16_t timer0_int = 0x08;
+        /* disable interrupts */ {
+            disable();
         }
-        /* reset counter */ {
+        /* set period/counter */ {
             timer0.period  = period;
             timer0.counter = 0;
         }
-        /* install new handler */ {
-            setvect(PIT_CHANNEL0_INT, timer0_isr);
-            outportb(PIT_CMD_WORD_REG, 0x36);
-            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 0) & 0xff)); 
-            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 8) & 0xff));
+        /* set old handler */ {
+            timer0.old_isr = getvect(timer0_int);
         }
-        enable();
+        /* install new handler */ {
+            setvect(timer0_int, timer0_isr);
+            outportb(PIT_CONTROL_REG, 0x36);
+            outportb(PIT_TIMER0_REG, ((timer0.period >> 0) & 0xff)); 
+            outportb(PIT_TIMER0_REG, ((timer0.period >> 8) & 0xff));
+        }
+        /* enable interrupts */ {
+            enable();
+        }
     }
 }
 
-void timer0_fini()
+void timer0_fini(void)
 {
     if(timer0.old_isr != NULL) {
-        disable();
-        /* reset counter */ {
+        const uint16_t timer0_int = 0x08;
+        /* disable interrupts */ {
+            disable();
+        }
+        /* set period/counter */ {
             timer0.period  = 0;
             timer0.counter = 0;
         }
         /* restore old handler */ {
-            setvect(PIT_CHANNEL0_INT, timer0.old_isr);
-            outportb(PIT_CMD_WORD_REG, 0x36);
-            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 0) & 0xff)); 
-            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 8) & 0xff));
+            setvect(timer0_int, timer0.old_isr);
+            outportb(PIT_CONTROL_REG, 0x36);
+            outportb(PIT_TIMER0_REG, ((timer0.period >> 0) & 0xff)); 
+            outportb(PIT_TIMER0_REG, ((timer0.period >> 8) & 0xff));
         }
         /* set old handler */ {
             timer0.old_isr = NULL;
         }
-        enable();
+        /* enable interrupts */ {
+            enable();
+        }
     }
 }
 
@@ -251,6 +227,36 @@ void vga_wait_next_vbl(void)
 
 /*
  * ---------------------------------------------------------------------------
+ * some useful functions
+ * ---------------------------------------------------------------------------
+ */
+
+uint8_t far* alloc_buffer(size_t row, size_t col)
+{
+    const size_t   bytes = (SIZE_T(row)   *   SIZE_T(col));
+    const uint32_t total = (UINT32_T(row) * UINT32_T(col));
+
+    if((bytes == total) && (bytes != 0)) {
+        uint8_t far* buffer = (uint8_t far*) malloc(bytes);
+        if(buffer != NULL) {
+            (void) memset(buffer, 0, bytes);
+            return buffer;
+        }
+    }
+    return NULL;
+}
+
+uint8_t far* free_buffer(uint8_t far* buffer)
+{
+    if(buffer != NULL) {
+        free(buffer);
+        buffer = NULL;
+    }
+    return buffer;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * types
  * ---------------------------------------------------------------------------
  */
@@ -332,11 +338,11 @@ Program g_program = {
 
 double clamp(double val, double min, double max)
 {
-    if(val <= min) {
-        return min;
+    if(val < min) {
+        val = min;
     }
-    if(val >= max) {
-        return max;
+    if(val > max) {
+        val = max;
     }
     return val;
 }
