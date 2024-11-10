@@ -96,14 +96,14 @@ uint8_t far* free_buffer(uint8_t far* buffer)
 #define PIT_CMD_WORD_REG 0x43
 #define PIC_CMD_WORD_REG 0x20
 
-struct Timer
+struct Timer0
 {
     uint16_t period;
     uint16_t counter;
     void interrupt (*old_isr)(void);
 };
 
-struct Timer timer0 = {
+struct Timer0 timer0 = {
     0,    /* period  */
     0,    /* counter */
     NULL  /* old_isr */
@@ -119,37 +119,20 @@ void interrupt timer0_isr(void)
     }
 }
 
-uint16_t timer0_get_period(uint16_t frequency)
-{
-    uint16_t period = 0;
-
-    if(frequency != 0) {
-        period = UINT16_T(UINT32_T(14318180UL) / (UINT32_T(12UL) * UINT32_T(frequency)));
-    }
-    return period;
-}
-
-uint16_t timer0_get_counter(void)
-{
-    uint16_t counter = 0;
-
-    /* critical section */ {
-        disable();
-        counter = timer0.counter;
-        enable();
-    }
-    return counter;
-}
-
 void timer0_init()
 {
+    const uint32_t master_clock = 14318180UL;
+    const uint32_t divide_clock = 12UL;
+    const uint32_t frequency    = 35UL;
+    const uint32_t period       = (master_clock / (divide_clock * frequency));
+
     if(timer0.old_isr == NULL) {
         disable();
         /* get old handler */ {
             timer0.old_isr = getvect(PIT_CHANNEL0_INT);
         }
         /* reset counter */ {
-            timer0.period  = timer0_get_period(35);
+            timer0.period  = period;
             timer0.counter = 0;
         }
         /* install new handler */ {
@@ -181,6 +164,18 @@ void timer0_fini()
         }
         enable();
     }
+}
+
+uint16_t timer0_get(void)
+{
+    uint16_t counter = 0;
+
+    /* critical section */ {
+        disable();
+        counter = timer0.counter;
+        enable();
+    }
+    return counter;
 }
 
 /*
@@ -800,9 +795,9 @@ void program_loop(Program* program)
     uint16_t timestamp = 0;
 
     while(kbhit() == 0) {
-        timestamp = timer0_get_counter();
+        timestamp = timer0_get();
         effect_update(&program->effect);
-        while(timer0_get_counter() == timestamp) {
+        while(timer0_get() == timestamp) {
             vga_wait_next_hbl();
         }
         effect_render(&program->effect, &program->screen);
