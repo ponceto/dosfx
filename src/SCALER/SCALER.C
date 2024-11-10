@@ -30,15 +30,15 @@
 #define countof(array) (sizeof(array) / sizeof(array[0]))
 #endif
 
-#define IGNORE(value)   ((void)(value))
-#define DOUBLE(value)   ((double)(value))
-#define SIZE_T(value)   ((size_t)(value))
-#define INT8_T(value)   ((int8_t)(value))
-#define INT16_T(value)  ((int16_t)(value))
-#define INT32_T(value)  ((int32_t)(value))
-#define UINT8_T(value)  ((uint8_t)(value))
-#define UINT16_T(value) ((uint16_t)(value))
-#define UINT32_T(value) ((uint32_t)(value))
+#define IGNORE(expression)   ((void)(expression))
+#define DOUBLE(expression)   ((double)(expression))
+#define SIZE_T(expression)   ((size_t)(expression))
+#define INT8_T(expression)   ((int8_t)(expression))
+#define INT16_T(expression)  ((int16_t)(expression))
+#define INT32_T(expression)  ((int32_t)(expression))
+#define UINT8_T(expression)  ((uint8_t)(expression))
+#define UINT16_T(expression) ((uint16_t)(expression))
+#define UINT32_T(expression) ((uint32_t)(expression))
 
 /*
  * ---------------------------------------------------------------------------
@@ -85,21 +85,102 @@ uint8_t far* free_buffer(uint8_t far* buffer)
 
 /*
  * ---------------------------------------------------------------------------
- * low level bios functions
+ * low level pit functions
  * ---------------------------------------------------------------------------
  */
 
-uint32_t get_bios_ticks(void)
+#define PIT_CHANNEL0_INT 0x08
+#define PIT_CHANNEL0_REG 0x40
+#define PIT_CHANNEL1_REG 0x41
+#define PIT_CHANNEL2_REG 0x42
+#define PIT_CMD_WORD_REG 0x43
+#define PIC_CMD_WORD_REG 0x20
+
+struct Timer
 {
-    static const volatile uint32_t* BIOS_TICKS = (const volatile uint32_t*) MK_FP(0x0040, 0x006C);
-    uint32_t                        bios_ticks = 0;
+    uint16_t period;
+    uint16_t counter;
+    void interrupt (*old_isr)(void);
+};
+
+struct Timer timer0 = {
+    0,    /* period  */
+    0,    /* counter */
+    NULL  /* old_isr */
+};
+
+void interrupt timer0_isr(void)
+{
+    /* increment counter */ {
+        ++timer0.counter;
+    }
+    /* acknowledge interrupt */ {
+        outportb(PIC_CMD_WORD_REG, 0x20);
+    }
+}
+
+uint16_t timer0_get_period(uint16_t frequency)
+{
+    uint16_t period = 0;
+
+    if(frequency != 0) {
+        period = UINT16_T(UINT32_T(14318180UL) / (UINT32_T(12UL) * UINT32_T(frequency)));
+    }
+    return period;
+}
+
+uint16_t timer0_get_counter(void)
+{
+    uint16_t counter = 0;
 
     /* critical section */ {
         disable();
-        bios_ticks = *BIOS_TICKS;
+        counter = timer0.counter;
         enable();
     }
-    return bios_ticks;
+    return counter;
+}
+
+void timer0_init()
+{
+    if(timer0.old_isr == NULL) {
+        disable();
+        /* get old handler */ {
+            timer0.old_isr = getvect(PIT_CHANNEL0_INT);
+        }
+        /* reset counter */ {
+            timer0.period  = timer0_get_period(35);
+            timer0.counter = 0;
+        }
+        /* install new handler */ {
+            setvect(PIT_CHANNEL0_INT, timer0_isr);
+            outportb(PIT_CMD_WORD_REG, 0x36);
+            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 0) & 0xff)); 
+            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 8) & 0xff));
+        }
+        enable();
+    }
+}
+
+void timer0_fini()
+{
+    if(timer0.old_isr != NULL) {
+        disable();
+        /* reset counter */ {
+            timer0.period  = 0;
+            timer0.counter = 0;
+        }
+        /* restore old handler */ {
+            setvect(PIT_CHANNEL0_INT, timer0.old_isr);
+            outportb(PIT_CMD_WORD_REG, 0x36);
+            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 0) & 0xff)); 
+            outportb(PIT_CHANNEL0_REG, ((timer0.period >> 8) & 0xff));
+        }
+        /* set old handler */ {
+            timer0.old_isr = NULL;
+        }
+        enable();
+    }
 }
 
 /*
@@ -108,10 +189,9 @@ uint32_t get_bios_ticks(void)
  * ---------------------------------------------------------------------------
  */
 
-#define VGA_WR_DAC_INDEX 0x3c8
-#define VGA_WR_DAC_VALUE 0x3c9
-#define VGA_RD_SR0_VALUE 0x3c2
-#define VGA_RD_SR1_VALUE 0x3da
+#define VGA_DAC_WR_INDEX 0x3c8
+#define VGA_DAC_WR_VALUE 0x3c9
+#define VGA_IS1_RD_VALUE 0x3da
 
 uint8_t vga_set_mode(uint8_t mode)
 {
@@ -136,20 +216,25 @@ uint8_t vga_set_mode(uint8_t mode)
 
 void vga_set_color(uint8_t color, uint8_t r, uint8_t g, uint8_t b)
 {
-    outportb(VGA_WR_DAC_INDEX, color);
-    outportb(VGA_WR_DAC_VALUE, (r >> 2));
-    outportb(VGA_WR_DAC_VALUE, (g >> 2));
-    outportb(VGA_WR_DAC_VALUE, (b >> 2));
+    outportb(VGA_DAC_WR_INDEX, color);
+    outportb(VGA_DAC_WR_VALUE, (r >> 2));
+    outportb(VGA_DAC_WR_VALUE, (g >> 2));
+    outportb(VGA_DAC_WR_VALUE, (b >> 2));
 }
 
-void vga_wait_vbl(void)
+void vga_wait_next_hbl(void)
 {
     uint8_t status = 0;
 
-    /* wait vbl */ {
+    /* already in hbl */ {
         do {
-            status = inportb(VGA_RD_SR1_VALUE);
-        } while((status & 0x08) == 0x00);
+            status = inportb(VGA_IS1_RD_VALUE);
+        } while((status & 0x01) != 0x00);
+    }
+    /* wait next hbl */ {
+        do {
+            status = inportb(VGA_IS1_RD_VALUE);
+        } while((status & 0x01) == 0x00);
     }
 }
 
@@ -159,12 +244,12 @@ void vga_wait_next_vbl(void)
 
     /* already in vbl */ {
         do {
-            status = inportb(VGA_RD_SR1_VALUE);
+            status = inportb(VGA_IS1_RD_VALUE);
         } while((status & 0x08) != 0x00);
     }
     /* wait next vbl */ {
         do {
-            status = inportb(VGA_RD_SR1_VALUE);
+            status = inportb(VGA_IS1_RD_VALUE);
         } while((status & 0x08) == 0x00);
     }
 }
@@ -705,14 +790,21 @@ void globals_fini(Globals* globals)
 
 void program_begin(Program* program)
 {
+    timer0_init();
     screen_init(&program->screen);
     effect_init(&program->effect);
 }
 
 void program_loop(Program* program)
 {
+    uint16_t timestamp = 0;
+
     while(kbhit() == 0) {
+        timestamp = timer0_get_counter();
         effect_update(&program->effect);
+        while(timer0_get_counter() == timestamp) {
+            vga_wait_next_hbl();
+        }
         effect_render(&program->effect, &program->screen);
     }
     while(kbhit() != 0) {
@@ -724,6 +816,7 @@ void program_end(Program* program)
 {
     effect_fini(&program->effect);
     screen_fini(&program->screen);
+    timer0_fini();
 }
 
 void program_main(Program* program)
