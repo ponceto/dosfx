@@ -396,7 +396,7 @@ void screen_init(Screen* screen)
     if(screen->pixels == NULL) {
         screen->v_mode = 0x13;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->pixels = MK_FP(0xA000, 0x0000);
+        screen->pixels = (uint8_t far*) MK_FP(0xA000, 0x0000);
     }
     if(screen->pixels != NULL) {
         uint16_t       index = 0;
