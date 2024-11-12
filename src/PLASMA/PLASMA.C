@@ -65,21 +65,19 @@ typedef void interrupt (*isr_t)(void);
 #define PIC_CONTROL_REG 0x20
 
 struct Timer0 {
-    uint16_t freq;
-    uint16_t period;
-    uint16_t counter;
+    uint16_t ival;
+    uint32_t msec;
     isr_t    old_isr;
 } timer0 = {
-    35,   /* freq    */
-    0,    /* period  */
-    0,    /* counter */
+    0,    /* ival    */
+    0,    /* msec    */
     NULL  /* old_isr */
 };
 
 void interrupt timer0_isr(void)
 {
-    /* increment counter */ {
-        ++timer0.counter;
+    /* update msec */ {
+        timer0.msec += timer0.ival;
     }
     /* acknowledge interrupt */ {
         outportb(PIC_CONTROL_REG, 0x20);
@@ -90,7 +88,7 @@ void timer0_init(void)
 {
     const uint32_t clock     = 14318180UL;
     const uint32_t scale     = 12UL;
-    const uint32_t frequency = timer0.freq;
+    const uint32_t frequency = 50UL;
     const uint32_t period    = (clock / (scale * frequency));
 
     if(timer0.old_isr == NULL) {
@@ -98,9 +96,9 @@ void timer0_init(void)
         /* disable interrupts */ {
             disable();
         }
-        /* set period/counter */ {
-            timer0.period  = period;
-            timer0.counter = 0;
+        /* set ival/msec */ {
+            timer0.ival = (((10000 / frequency) + 5) / 10);
+            timer0.msec = 0;
         }
         /* set old handler */ {
             timer0.old_isr = getvect(timer0_int);
@@ -108,8 +106,8 @@ void timer0_init(void)
         /* install new handler */ {
             setvect(timer0_int, timer0_isr);
             outportb(PIT_CONTROL_REG, 0x36);
-            outportb(PIT_TIMER0_REG, ((timer0.period >> 0) & 0xff)); 
-            outportb(PIT_TIMER0_REG, ((timer0.period >> 8) & 0xff));
+            outportb(PIT_TIMER0_REG, ((period >> 0) & 0xff)); 
+            outportb(PIT_TIMER0_REG, ((period >> 8) & 0xff));
         }
         /* enable interrupts */ {
             enable();
@@ -124,15 +122,15 @@ void timer0_fini(void)
         /* disable interrupts */ {
             disable();
         }
-        /* set period/counter */ {
-            timer0.period  = 0;
-            timer0.counter = 0;
+        /* set ival/msec */ {
+            timer0.ival = 0;
+            timer0.msec = 0;
         }
         /* restore old handler */ {
             setvect(timer0_int, timer0.old_isr);
             outportb(PIT_CONTROL_REG, 0x36);
-            outportb(PIT_TIMER0_REG, ((timer0.period >> 0) & 0xff)); 
-            outportb(PIT_TIMER0_REG, ((timer0.period >> 8) & 0xff));
+            outportb(PIT_TIMER0_REG, 0x00); 
+            outportb(PIT_TIMER0_REG, 0x00);
         }
         /* set old handler */ {
             timer0.old_isr = NULL;
@@ -143,16 +141,16 @@ void timer0_fini(void)
     }
 }
 
-uint16_t timer0_get(void)
+uint32_t timer0_get_msec(void)
 {
-    uint16_t counter = 0;
+    uint32_t msec = 0;
 
     /* critical section */ {
         disable();
-        counter = timer0.counter;
+        msec = timer0.msec;
         enable();
     }
-    return counter;
+    return msec;
 }
 
 /*
@@ -164,6 +162,11 @@ uint16_t timer0_get(void)
 #define VGA_DAC_WR_INDEX 0x3c8
 #define VGA_DAC_WR_VALUE 0x3c9
 #define VGA_IS1_RD_VALUE 0x3da
+
+uint8_t far* vga_get_addr(void)
+{
+    return (uint8_t far*) MK_FP(0xA000, 0x0000);
+}
 
 uint8_t vga_set_mode(uint8_t mode)
 {
@@ -284,6 +287,7 @@ struct _Screen
     uint8_t      p_mode;
     uint16_t     dim_w;
     uint16_t     dim_h;
+    uint16_t     pitch;
     uint8_t far* pixels;
 };
 
@@ -291,6 +295,7 @@ struct _Effect
 {
     uint16_t     dim_w;
     uint16_t     dim_h;
+    uint16_t     pitch;
     uint16_t     pal_r;
     uint16_t     pal_g;
     uint16_t     pal_b;
@@ -304,6 +309,7 @@ struct _Buffer
 {
     uint16_t     dim_w;
     uint16_t     dim_h;
+    uint16_t     pitch;
     uint16_t     pos_x;
     uint16_t     pos_y;
     uint16_t     angle;
@@ -343,11 +349,13 @@ Program g_program = {
         0,    /* p_mode */
         320,  /* dim_w  */
         200,  /* dim_h  */
+        320,  /* pitch  */
         NULL  /* pixels */
     },
     /* effect */ {
         160,  /* dim_w  */
         100,  /* dim_h  */
+        160,  /* pitch  */
         0,    /* pal_r  */
         0,    /* pal_g  */
         0,    /* pal_b  */
@@ -359,6 +367,7 @@ Program g_program = {
     /* image1 */ {
         320,  /* dim_w  */
         200,  /* dim_h  */
+        320,  /* pitch  */
         0,    /* pos_x  */
         0,    /* pos_y  */
         0,    /* angle  */
@@ -368,6 +377,7 @@ Program g_program = {
     /* image2 */ {
         320,  /* dim_w  */
         200,  /* dim_h  */
+        320,  /* pitch  */
         0,    /* pos_x  */
         0,    /* pos_y  */
         0,    /* angle  */
@@ -377,6 +387,7 @@ Program g_program = {
     /* image3 */ {
         320,  /* dim_w  */
         200,  /* dim_h  */
+        320,  /* pitch  */
         0,    /* pos_x  */
         0,    /* pos_y  */
         0,    /* angle  */
@@ -396,7 +407,7 @@ void screen_init(Screen* screen)
     if(screen->pixels == NULL) {
         screen->v_mode = 0x13;
         screen->p_mode = vga_set_mode(screen->v_mode);
-        screen->pixels = (uint8_t far*) MK_FP(0xA000, 0x0000);
+        screen->pixels = vga_get_addr();
     }
     if(screen->pixels != NULL) {
         uint16_t       index = 0;
@@ -412,13 +423,16 @@ void screen_init(Screen* screen)
     if(screen->pixels != NULL) {
         const uint16_t dst_w = screen->dim_w;
         const uint16_t dst_h = screen->dim_h;
+        const uint16_t dst_s = screen->pitch;
         uint8_t far*   dst_p = screen->pixels;
         uint16_t       dst_x = 0;
         uint16_t       dst_y = 0;
         for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            uint8_t far* dst_o = dst_p;
             for(dst_x = 0; dst_x < dst_w; ++dst_x) {
                 *dst_p++ = UINT8_T(0);
             }
+            dst_p = dst_o + dst_s;
         }
     }
 }
@@ -441,7 +455,7 @@ void screen_fini(Screen* screen)
 void effect_init(Effect* effect)
 {
     if(effect->pixels == NULL) {
-        effect->pixels = alloc_buffer(effect->dim_h, effect->dim_w);
+        effect->pixels = alloc_buffer(effect->dim_h, effect->pitch);
     }
 }
 
@@ -452,51 +466,48 @@ void effect_fini(Effect* effect)
     }
 }
 
-void effect_update(Effect* effect, Program* program)
+void effect_update(Effect* effect)
 {
-    const uint16_t     dim_1 = program->image1.dim_w;
-    const uint16_t     dim_2 = program->image2.dim_w;
-    const uint16_t     dim_3 = program->image3.dim_w;
-    const uint8_t far* img_1 = &program->image1.pixels[(program->image1.pos_y * dim_1) + program->image1.pos_x];
-    const uint8_t far* img_2 = &program->image2.pixels[(program->image2.pos_y * dim_2) + program->image2.pos_x];
-    const uint8_t far* img_3 = &program->image3.pixels[(program->image3.pos_y * dim_3) + program->image3.pos_x];
+    IGNORE(effect);
+}
+
+void effect_render(Effect* effect, Program* program)
+{
+    const uint16_t     bpl_1 = program->image1.pitch;
+    const uint8_t far* src_1 = &program->image1.pixels[(program->image1.pos_y * bpl_1) + program->image1.pos_x];
+    const uint16_t     bpl_2 = program->image2.pitch;
+    const uint8_t far* src_2 = &program->image2.pixels[(program->image2.pos_y * bpl_2) + program->image2.pos_x];
+    const uint16_t     bpl_3 = program->image3.pitch;
+    const uint8_t far* src_3 = &program->image3.pixels[(program->image3.pos_y * bpl_3) + program->image3.pos_x];
+    const uint16_t     dst_w = effect->dim_w;
+    const uint16_t     dst_h = effect->dim_h;
+    const uint16_t     dst_s = effect->pitch;
+    uint8_t far*       dst_p = effect->pixels;
+    uint16_t           cnt_x = 0;
+    uint16_t           cnt_y = 0;
 
     /* update the effect */ {
-        const uint16_t dst_w = effect->dim_w;
-        const uint16_t dst_h = effect->dim_h;
-        uint16_t       dst_x = 0;
-        uint16_t       dst_y = 0;
-        uint8_t far*   dst_p = effect->pixels;
-        for(dst_y = dst_h; dst_y != 0; --dst_y) {
-            const uint8_t far* src_1 = img_1;
-            const uint8_t far* src_2 = img_2;
-            const uint8_t far* src_3 = img_3;
-            for(dst_x = dst_w; dst_x != 0; --dst_x) {
+        for(cnt_y = dst_h; cnt_y != 0; --cnt_y) {
+            uint8_t far*       dst_o = dst_p;
+            const uint8_t far* img_1 = src_1;
+            const uint8_t far* img_2 = src_2;
+            const uint8_t far* img_3 = src_3;
+            for(cnt_x = dst_w; cnt_x != 0; --cnt_x) {
                 *dst_p++ = *src_1++
                          + *src_2++
                          + *src_3++
                          ;
             }
-            img_1 += dim_1;
-            img_2 += dim_2;
-            img_3 += dim_3;
+            dst_p = dst_o + dst_s;
+            src_1 = img_1 + bpl_1;
+            src_2 = img_2 + bpl_2;
+            src_3 = img_3 + bpl_3;
         }
     }
 }
 
-void effect_render(Effect* effect, Screen* screen)
+void effect_putscr(Effect* effect, Screen* screen)
 {
-    const uint16_t     src_w = effect->dim_w;
-    const uint16_t     src_h = effect->dim_h;
-    const uint16_t     src_s = ((src_w + 1) & ~1);
-    const uint8_t far* src_p = effect->pixels;
-    const uint16_t     dst_w = screen->dim_w;
-    const uint16_t     dst_h = screen->dim_h;
-    const uint16_t     dst_s = ((dst_w + 1) & ~1);
-    uint8_t far*       dst_p = screen->pixels;
-    uint16_t           cnt_x = 0;
-    uint16_t           cnt_y = 0;
-
     /* wait for vbl */ {
         vga_wait_next_vbl();
     }
@@ -520,6 +531,14 @@ void effect_render(Effect* effect, Screen* screen)
         }
     }
     /* blit the effect */ {
+        const uint16_t     src_w = effect->dim_w;
+        const uint16_t     src_h = effect->dim_h;
+        const uint16_t     src_s = effect->pitch;
+        const uint8_t far* src_p = effect->pixels;
+        const uint16_t     dst_s = screen->pitch;
+        uint8_t far*       dst_p = screen->pixels;
+        uint16_t           cnt_x = 0;
+        uint16_t           cnt_y = 0;
         for(cnt_y = src_h; cnt_y != 0; --cnt_y) {
             uint8_t far*       dst_o = dst_p;
             const uint8_t far* src_o = src_p;
@@ -543,20 +562,23 @@ void effect_render(Effect* effect, Screen* screen)
 void image1_init(Image1* image1)
 {
     if(image1->pixels == NULL) {
-        image1->pixels = alloc_buffer(image1->dim_h, image1->dim_w);
+        image1->pixels = alloc_buffer(image1->dim_h, image1->pitch);
     }
     if(image1->pixels != NULL) {
         const uint16_t dst_w = image1->dim_w;
         const uint16_t dst_h = image1->dim_h;
+        const uint16_t dst_s = image1->pitch;
         uint8_t far*   dst_p = image1->pixels;
         uint16_t       dst_x = 0;
         uint16_t       dst_y = 0;
         for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            uint8_t far* dst_o = dst_p;
             for(dst_x = 0; dst_x < dst_w; ++dst_x) {
                 const int32_t dx = (INT32_T(dst_x) - INT32_T(dst_w / 2));
                 const int32_t dy = (INT32_T(dst_y) - INT32_T(dst_h / 2));
-                *dst_p++ = UINT8_T(sqrt((dx * dx) + (dy * dy)) * 7.0);
+                *dst_p++ = UINT8_T(hypot(dx, dy) * 7.0);
             }
+            dst_p = dst_o + dst_s;
         }
     }
 }
@@ -586,20 +608,23 @@ void image1_update(Image1* image1, int16_t px, int16_t py, int16_t dw, int16_t d
 void image2_init(Image2* image2)
 {
     if(image2->pixels == NULL) {
-        image2->pixels = alloc_buffer(image2->dim_h, image2->dim_w);
+        image2->pixels = alloc_buffer(image2->dim_h, image2->pitch);
     }
     if(image2->pixels != NULL) {
         const uint16_t dst_w = image2->dim_w;
         const uint16_t dst_h = image2->dim_h;
+        const uint16_t dst_s = image2->pitch;
         uint8_t far*   dst_p = image2->pixels;
         uint16_t       dst_x = 0;
         uint16_t       dst_y = 0;
         for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            uint8_t far* dst_o = dst_p;
             for(dst_x = 0; dst_x < dst_w; ++dst_x) {
                 const int32_t dx = (INT32_T(dst_x) - INT32_T(dst_w / 2));
                 const int32_t dy = (INT32_T(dst_y) - INT32_T(dst_h / 2));
-                *dst_p++ = UINT8_T((1.0 + sin(sqrt((dx * dx) + (dy * dy)) / 11.0)) * 127.5);
+                *dst_p++ = UINT8_T((1.0 + sin(hypot(dx, dy) / 11.0)) * 127.5);
             }
+            dst_p = dst_o + dst_s;
         }
     }
 }
@@ -629,20 +654,23 @@ void image2_update(Image2* image2, int16_t px, int16_t py, int16_t dw, int16_t d
 void image3_init(Image3* image3)
 {
     if(image3->pixels == NULL) {
-        image3->pixels = alloc_buffer(image3->dim_h, image3->dim_w);
+        image3->pixels = alloc_buffer(image3->dim_h, image3->pitch);
     }
     if(image3->pixels != NULL) {
         const uint16_t dst_w = image3->dim_w;
         const uint16_t dst_h = image3->dim_h;
+        const uint16_t dst_s = image3->pitch;
         uint8_t far*   dst_p = image3->pixels;
         uint16_t       dst_x = 0;
         uint16_t       dst_y = 0;
         for(dst_y = 0; dst_y < dst_h; ++dst_y) {
+            uint8_t far* dst_o = dst_p;
             for(dst_x = 0; dst_x < dst_w; ++dst_x) {
                 const int32_t dx = (INT32_T(dst_x) - INT32_T(dst_w / 2));
                 const int32_t dy = (INT32_T(dst_y) - INT32_T(dst_h / 2));
-                *dst_p++ = UINT8_T((1.0 + sin(sqrt((dx * dx) + (dy * dy)) / 19.0)) * 127.5);
+                *dst_p++ = UINT8_T((1.0 + sin(hypot(dx, dy) / 19.0)) * 127.5);
             }
+            dst_p = dst_o + dst_s;
         }
     }
 }
@@ -705,22 +733,31 @@ void program_begin(Program* program)
 
 void program_loop(Program* program)
 {
-    uint16_t timestamp = 0;
-    const int16_t px = ((program->effect.dim_w / 2) + 0);
-    const int16_t py = ((program->effect.dim_h / 2) + 0);
-    const int16_t dw = ((program->effect.dim_w / 2) - 1);
-    const int16_t dh = ((program->effect.dim_h / 2) - 1);
+    const uint16_t fps      = 35;
+    const uint16_t duration = (((10000 / fps) + 5) / 10);
+    uint32_t       now      = timer0_get_msec();
+    uint32_t       deadline = now + duration;
+    const int16_t  px       = ((program->effect.dim_w / 2) + 0);
+    const int16_t  py       = ((program->effect.dim_h / 2) + 0);
+    const int16_t  dw       = ((program->effect.dim_w / 2) - 1);
+    const int16_t  dh       = ((program->effect.dim_h / 2) - 1);
+
 
     while(kbhit() == 0) {
-        timestamp = timer0_get();
         image1_update(&program->image1, px, py, dw, dh);
         image2_update(&program->image2, px, py, dw, dh);
         image3_update(&program->image3, px, py, dw, dh);
-        effect_update(&program->effect, program);
-        while(timer0_get() == timestamp) {
+        effect_update(&program->effect);
+        while((now = timer0_get_msec()) < deadline) {
             vga_wait_next_hbl();
         }
-        effect_render(&program->effect, &program->screen);
+        if((deadline += duration) > now) {
+            effect_render(&program->effect, program);
+            effect_putscr(&program->effect, &program->screen);
+        }
+        else {
+            deadline += duration;
+        }
     }
     while(kbhit() != 0) {
         (void) getch();
