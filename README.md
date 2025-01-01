@@ -115,7 +115,7 @@ In the demoscene, the wobble effect became iconic for its captivating, hypnotic 
 This project is released under the terms of the General Public License version 2.
 
 ```
-dosfx - Copyright (c) 2024 - Olivier Poncet
+dosfx - Copyright (c) 2024-2025 - Olivier Poncet
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
